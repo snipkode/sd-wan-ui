@@ -8,6 +8,8 @@ const PORT = Number(process.env.PORT || 3001);
 const UI_TOKEN = process.env.UI_TOKEN || '';
 const OUT_DIR = path.resolve(process.env.OUT_DIR || '/root/out');
 const MODEL_DIR = path.resolve(process.env.MODEL_DIR || '/root/models/wan');
+const OUT_HOST_DIR = String(process.env.OUT_HOST_DIR || '').trim() || OUT_DIR;
+const MODEL_HOST_DIR = String(process.env.MODEL_HOST_DIR || '').trim() || MODEL_DIR;
 const IMAGE = process.env.SD_IMAGE || 'sd-cpu:local';
 const BACKEND = String(process.env.SD_BACKEND || 'cpu').trim();
 const GPU_DEVICES = String(process.env.GPU_DEVICES || 'all').trim() || 'all';
@@ -15,8 +17,9 @@ const VULKAN_DEVICE = String(process.env.VULKAN_DEVICE || '/dev/dri').trim() || 
 const EXTRA_ARGS = parseCliArgs(process.env.SD_EXTRA_ARGS || '');
 const FFMPEG_BIN = process.env.FFMPEG_BIN || 'ffmpeg';
 const KEEP_AVI = process.env.KEEP_AVI === '1';
-const STATE_FILE = path.join(__dirname, 'state.json');
+const STATE_FILE = path.resolve(process.env.STATE_FILE || path.join(__dirname, 'state.json'));
 fs.mkdirSync(OUT_DIR, { recursive: true });
+fs.mkdirSync(path.dirname(STATE_FILE), { recursive: true });
 const HTML = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
 const BOOT = Date.now();
 const VIDEO_FPS = 16;
@@ -380,8 +383,8 @@ function startJob(config) {
   const args = [
     'run', '--rm', '--name', container,
     ...dockerDeviceArgs(),
-    '-v', `${MODEL_DIR}:/models:ro`,
-    '-v', `${OUT_DIR}:/output`,
+    '-v', `${MODEL_HOST_DIR}:/models:ro`,
+    '-v', `${OUT_HOST_DIR}:/output`,
     IMAGE,
     ...backendCliArgs(),
     '-M', 'vid_gen',
@@ -680,7 +683,8 @@ const server = http.createServer(async (req, res) => {
       image: IMAGE,
       dockerDevices: dockerDeviceArgs(),
       backendArgs: backendCliArgs(),
-      extraArgs: EXTRA_ARGS
+      extraArgs: EXTRA_ARGS,
+      hostMounts: { models: MODEL_HOST_DIR, output: OUT_HOST_DIR }
     });
   }
   if (!checkAuth(req, res)) return;

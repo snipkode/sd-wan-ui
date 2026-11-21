@@ -1,5 +1,6 @@
 out/
 models/
+runtime/
 state.json
 state.json.tmp
 server.log

@@ -5,7 +5,8 @@ UI web ringan untuk menjalankan inference **Wan 2.1 T2V 1.3B Q4_K_M** lewat `sta
 ## Ringkasan
 
 - Backend: **Node.js built-in modules only** (`http`, `fs`, `path`, `child_process`) — tidak ada dependency npm.
-- Inference: `sd-cli` dari `stable-diffusion.cpp` release `master-1106-532d2c1`, dikemas sebagai image Docker CPU `sd-cpu:local`.
+- Inference: `sd-cli` dari `stable-diffusion.cpp` release `master-1106-532d2c1`, dikemas sebagai image Docker CPU `sd-cpu:local` dan dipublish sebagai `snipkode/sd-wan-infer:latest`.
+- Docker Compose: UI dan inference bisa langsung dicoba di mesin lain lewat `snipkode/sd-wan-ui:latest` tanpa build manual.
 - Target awal: server tanpa GPU, 2 core CPU, RAM 7.8 GB, disk awal 4.4 GB.
 - Mode: `-M vid_gen`. `frames=1` menghasilkan PNG; `frames>1` menghasilkan video.
 - UI: vanilla HTML/CSS/JS, responsive Apple-like, dilengkapi filter Semua/Gambar/Video.
@@ -112,13 +113,14 @@ curl -s http://127.0.0.1:3001/api/status
 
 ```mermaid
 flowchart LR
-    B[Browser / HP] -->|HTTP + SSE| N[Node.js server.js]
-    N -->|spawn docker run| D[Docker sd-cpu:local]
-    D -->|mount read-only /models| M[(GGUF + TAEHV)]
-    D -->|mount read-write /output| O[(/root/out)]
+    B[Browser / HP] -->|HTTP + SSE| N[UI container: Node.js server.js]
+    N -->|spawn docker run via /var/run/docker.sock| D[Docker sd-wan-infer]
+    D -->|mount read-only /models| M[(HOST_MODEL_DIR)]
+    D -->|mount read-write /output| O[(HOST_OUT_DIR)]
+    N -->|baca/tulis /app/out + /app/runtime/state.json| O
     N -->|parse stdout/stderr| D
     N -->|GET /out/name + HTTP Range| B
-    N -->|state.json| S[(Job state)]
+    N -->|state.json| S[(runtime/state.json)]
 ```
 
 ### Alur request
@@ -146,9 +148,14 @@ flowchart LR
 | --- | --- |
 | `server.js` | HTTP router, SSE hub, job manager, auth opsional, state persistence, video Range serving |
 | `index.html` | UI single-file: form generate, status/progress, log, gallery, filter media |
-| `Dockerfile` | Image CPU dari binary resmi `stable-diffusion.cpp` Ubuntu 26.04 x86_64 |
+| `Dockerfile` | Image inference CPU dari binary resmi `stable-diffusion.cpp` Ubuntu 26.04 x86_64 |
+| `Dockerfile.ui` | Image UI Node.js + Docker CLI + ffmpeg |
+| `docker-compose.yml` | Menjalankan UI, mount model/hasil, dan Docker socket |
+| `.env.compose.example` | Contoh env untuk alur Docker Compose |
 | `scripts/download-models.sh` | Download model ke `MODEL_DIR` |
-| `scripts/build-image.sh` | Build image `sd-cpu:local` |
+| `scripts/build-image.sh` | Build image inference `sd-cpu:local` |
+| `scripts/build-ui-image.sh` | Build image UI `sd-wan-ui:local` |
+| `scripts/publish-images.sh` | Tag dan push image inference + UI ke Docker Hub |
 | `scripts/infer.sh` | Inference manual tanpa UI |
 | `scripts/start-ui.sh` | Menjalankan UI dengan `.env` opsional |
 | `.env.example` | Contoh konfigurasi lingkungan |
@@ -313,6 +320,8 @@ curl -X POST http://127.0.0.1:3001/api/generate \
 | `GET` | `/api/presets` | Daftar preset durasi/kualitas video |
 | `GET` | `/api/stream` | SSE realtime |
 | `POST` | `/api/generate` | Memulai inference |
+| `POST` | `/api/cancel` | Menghentikan job aktif |
+| `POST` | `/api/delete` | Menghapus file hasil |
 | `GET` | `/out/<nama>` | Mengirim PNG/MP4/WebM/AVI, support Range |
 
 Contoh generate video pendek:
@@ -346,10 +355,15 @@ Salin `.env.example` menjadi `.env`, lalu sesuaikan:
 | Variabel | Default | Keterangan |
 | --- | --- | --- |
 | `HOST` | `0.0.0.0` | Bind address UI |
-| `PORT` | `3001` | Port UI |
+| `PORT` | `3001` | Port UI di dalam container/host saat langsung |
+| `UI_PORT` | `3001` | Port host untuk mapping Docker Compose |
 | `UI_TOKEN` | kosong | Jika diisi, aktifkan Basic Auth dengan username `sd` |
-| `OUT_DIR` | `/root/out` | Direktori hasil generate |
-| `MODEL_DIR` | `/root/models/wan` | Direktori model GGUF/TAEHV |
+| `OUT_DIR` | `/root/out` | Direktori hasil generate yang dilihat UI |
+| `MODEL_DIR` | `/root/models/wan` | Direktori model GGUF/TAEHV yang dilihat UI |
+| `OUT_HOST_DIR` | `OUT_DIR` | Path host yang di-mount ke `/output` container inference |
+| `MODEL_HOST_DIR` | `MODEL_DIR` | Path host yang di-mount ke `/models` container inference |
+| `STATE_FILE` | `state.json` | Lokasi state job persist |
+| `SD_UI_IMAGE` | `snipkode/sd-wan-ui:latest` | Image UI untuk Docker Compose |
 | `SD_IMAGE` | `sd-cpu:local` | Nama image Docker inference |
 | `SD_BACKEND` | `cpu` | Backend `sd-cli`: `cpu`, `cuda`/`cuda0`, `vulkan`/`vulkan0`, atau module map seperti `clip=cpu,diffusion=cuda0` |
 | `GPU_DEVICES` | `all` | Nilai `--gpus` Docker saat backend CUDA |
@@ -374,6 +388,59 @@ Default `SD_BACKEND=cpu`, sehingga tidak ada flag GPU Docker yang ditambahkan. N
 `GPU_DEVICES` mengubah nilai `--gpus` untuk NVIDIA, sedangkan `VULKAN_DEVICE` mengubah path device untuk AMD/Intel Vulkan. `SD_EXTRA_ARGS` diteruskan sebagai argumen CLI tanpa shell, sehingga aman untuk nilai seperti `--max-vram 8`.
 
 Untuk memakai GPU nanti: siapkan image CUDA/Vulkan, set `SD_IMAGE=sd-gpu:local`, lalu set `SD_BACKEND=cuda0` atau `vulkan0`. Server tidak mendeteksi GPU secara otomatis; backend harus dipilih lewat env. Detail backend aktif bisa dilihat di `GET /api/health`.
+
+## Docker Compose
+
+Cara paling cepat untuk mencoba di mesin lain:
+
+```bash
+git clone https://github.com/snipkode/sd-wan-ui.git
+cd sd-wan-ui
+mkdir -p models out runtime
+MODEL_DIR="$PWD/models" ./scripts/download-models.sh
+cp .env.compose.example .env
+docker compose up -d
+```
+
+Buka `http://<host>:3001`. Ganti `UI_PORT` di `.env` kalau port `3001` sudah dipakai.
+
+Compose memakai dua image dari Docker Hub:
+
+| Image | Fungsi |
+| --- | --- |
+| `snipkode/sd-wan-ui:latest` | UI Node.js + Docker CLI + ffmpeg |
+| `snipkode/sd-wan-infer:latest` | `sd-cli` CPU untuk inference |
+
+Jika memakai akun Docker Hub lain, ubah `SD_UI_IMAGE` dan `SD_IMAGE` di `.env`, atau override saat menjalankan:
+
+```bash
+SD_UI_IMAGE=username/sd-wan-ui:latest \
+SD_IMAGE=username/sd-wan-infer:latest \
+docker compose up -d
+```
+
+Model tidak ikut di image karena ukurannya ~3.7 GB. Compose me-mount `./models`, `./out`, dan `./runtime` dari host. UI melihatnya sebagai `/app/models`, `/app/out`, dan `/app/runtime`; container inference menerima path host lewat `MODEL_HOST_DIR`/`OUT_HOST_DIR`. State job tersimpan di `runtime/state.json`, jadi tidak hilang saat container di-recreate.
+
+Perintah berguna:
+
+```bash
+docker compose ps
+docker compose logs -f ui
+curl http://127.0.0.1:3001/api/health
+docker compose down
+```
+
+Untuk publish ulang image setelah mengubah kode:
+
+```bash
+./scripts/build-image.sh
+./scripts/build-ui-image.sh
+DOCKERHUB_USER=snipkode ./scripts/publish-images.sh
+```
+
+Set `UI_TOKEN` di `.env` sebelum mengekspos UI ke jaringan yang tidak dipercaya. Compose me-mount `/var/run/docker.sock` agar UI bisa menjalankan container inference; ini setara dengan akses root ke Docker host, jadi jangan dijalankan untuk pihak yang tidak dipercaya.
+
+Untuk GPU, siapkan image inference CUDA/Vulkan dan set `SD_IMAGE` serta `SD_BACKEND=cuda0` atau `vulkan0` di `.env`. Driver host harus sudah siap; UI container tetap tidak membutuhkan GPU.
 
 ## Deployment
 
