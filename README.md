@@ -99,10 +99,12 @@ Semua argumen dirakit di `startJob()` (`server.js:223`). Berikut arti dan alasan
 | `--steps` | Jumlah langkah denoising | 4 untuk smoke test cepat, 10 untuk kualitas uji |
 | `-W` / `-H` | Resolusi frame | 320x256 dipakai saat uji video agar 2 core CPU tidak kewalahan; server memaksa kelipatan 16 |
 | `--video-frames` | Jumlah frame yang dibuat | `1` menghasilkan PNG, `>1` menghasilkan video |
-| `-o /output/<nama>` | Path output di dalam container | `/root/out` di-mount ke `/output`, sehingga Node/UI bisa membaca hasilnya |
+| `-o /output/<nama>.avi` | Path output di dalam container | `/root/out` di-mount ke `/output`. Harus `.avi`/`.webm`/`.webp`; `.mp4` akan ditambahi `.avi` oleh `sd-cli` |
 | `-v` | Logging verbose | Server mem-parsing progres dan path hasil dari baris log verbose |
 
 Backend dipilih otomatis sebagai CPU. Tidak ada flag CUDA/Vulkan karena host tidak memiliki GPU dan image resmi CPU yang dipakai adalah build Ubuntu x86_64 biasa.
+
+Untuk video, server meminta `.avi` ke `sd-cli`, lalu setelah container selesai menjalankan `ffmpeg` untuk menghasilkan `.mp4` H.264/yuv420p yang bisa diputar browser. AVI asli dihapus kecuali `KEEP_AVI=1`. Jika `ffmpeg` tidak tersedia, AVI tetap disimpan dan UI menampilkan warning.
 
 ## API
 
@@ -152,6 +154,8 @@ Salin `.env.example` menjadi `.env`, lalu sesuaikan:
 | `OUT_DIR` | `/root/out` | Direktori hasil generate |
 | `MODEL_DIR` | `/root/models/wan` | Direktori model GGUF/TAEHV |
 | `SD_IMAGE` | `sd-cpu:local` | Nama image Docker inference |
+| `FFMPEG_BIN` | `ffmpeg` | Path binary ffmpeg untuk konversi AVI → MP4 |
+| `KEEP_AVI` | `0` | Set `1` untuk menyimpan AVI asli setelah konversi |
 
 Jika `UI_TOKEN` kosong, UI terbuka tanpa auth. Untuk deployment publik, disarankan mengisinya dan menaruh reverse proxy dengan TLS di depan.
 
@@ -185,6 +189,8 @@ UI_TOKEN=ganti-dengan-token-kuat
 OUT_DIR=/root/out
 MODEL_DIR=/root/models/wan
 SD_IMAGE=sd-cpu:local
+FFMPEG_BIN=ffmpeg
+KEEP_AVI=0
 ```
 
 `HOST=127.0.0.1` disarankan bila reverse proxy berada di host yang sama. Jika tetap memakai `0.0.0.0`, batasi akses lewat firewall dan aktifkan `UI_TOKEN`.
@@ -254,6 +260,7 @@ systemctl restart sd-wan-ui
 - Model: ~3.7 GB di disk.
 - Image Docker + cache build: siapkan ruang tambahan beberapa GB.
 - RAM: minimum ~7 GB untuk conditioning + diffusion + TAEHV.
+- `ffmpeg`: diperlukan agar video AVI otomatis menjadi MP4 yang bisa diputar browser. Tanpa ini, hasil tetap AVI dan UI menampilkan warning.
 - CPU: 2 core bisa, tapi 9 frame `320x256` / 4 step memakan ~113 detik.
 - Host uji hanya memiliki sisa disk ~275 MB setelah instalasi, jadi lakukan cleanup atau tambah disk sebelum generate video panjang.
 
@@ -265,12 +272,38 @@ docker builder prune -f
 rm -f /root/out/*.avi
 ```
 
-## Catatan video
+## Kenapa video selalu `.avi` dan tidak bisa diputar
 
-Build `stable-diffusion.cpp` ini menyimpan hasil multi-frame sebagai AVI Motion JPEG meskipun nama output diakhiri `.mp4`, misalnya `wan-123.mp4.avi`. UI sudah mengenali `.avi`, tetapi untuk kompatibilitas browser yang lebih luas hasil bisa dikonversi:
+Ini perilaku `sd-cli` release `master-1106-532d2c1`, bukan bug di UI. Di `examples/cli/main.cpp`, fungsi `save_results()` hanya menerima `.avi`, `.webp`, dan `.webm` sebagai container video:
+
+```cpp
+if ((mode == VID_GEN && num_results > 1) || video_upscale_output) {
+    if (ext_lower != ".avi" && ext_lower != ".webp" && ext_lower != ".webm")
+        ext = ".avi";
+    video_path = base_path;
+    video_path += ext;
+}
+```
+
+Karena `.mp4` tidak termasuk daftar itu, `-o wan-123.mp4` menjadi `wan-123.mp4.avi`. Isinya AVI Motion JPEG; Chrome dan Safari umumnya tidak bisa memutarnya, jadi terasa seperti video rusak. Jumlah 5 frame sendiri valid untuk Wan (`4n+1`), jadi bukan penyebab utamanya.
+
+Perbaikan di repo ini:
+
+- server meminta `-o wan-123.avi` agar tidak ada nama `.mp4.avi`;
+- setelah container selesai, server menjalankan `ffmpeg` menjadi `wan-123.mp4` dengan `libx264`, `yuv420p`, dan `+faststart`;
+- AVI asli dihapus otomatis kecuali `KEEP_AVI=1`;
+- jika `ffmpeg` tidak tersedia, AVI tetap disimpan dan UI menampilkan warning.
+
+Cek prerequisite di host:
 
 ```bash
-ffmpeg -y -i /root/out/wan-123.mp4.avi \
+ffmpeg -version
+```
+
+Konversi manual bila perlu:
+
+```bash
+ffmpeg -y -i /root/out/wan-123.avi \
   -c:v libx264 -pix_fmt yuv420p -movflags +faststart \
   /root/out/wan-123.mp4
 ```

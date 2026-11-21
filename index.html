@@ -357,7 +357,7 @@ function fmt(size) {
 function renderProgress(progress) {
   const pct = Math.max(0, Math.min(100, Number(progress && progress.percent) || 0));
   barFill.style.width = `${pct}%`;
-  if (currentJob && ['starting', 'running', 'decoding'].includes(currentJob.status)) {
+  if (currentJob && ['starting', 'running', 'decoding', 'encoding'].includes(currentJob.status)) {
     jobMeta.textContent = `${currentJob.frames} frame · ${pct}% · ${progress.current || 0}/${progress.total || currentJob.progress.total || 0}`;
   }
 }
@@ -373,10 +373,11 @@ function renderJob(job) {
     genBtn.textContent = 'Generate';
     return;
   }
-  const busy = ['starting', 'running', 'decoding'].includes(job.status);
+  const busy = ['starting', 'running', 'decoding', 'encoding'].includes(job.status);
   jobStatus.textContent = job.status;
   jobStatus.className = `badge ${job.status === 'done' ? 'ok' : job.status === 'error' ? 'bad' : 'busy'}`;
   if (job.error) jobMeta.textContent = job.error.slice(0, 110);
+  else if (job.warning) jobMeta.textContent = job.warning.slice(0, 110);
   else if (job.status === 'done') jobMeta.textContent = job.output ? `selesai · ${job.output}` : 'selesai';
   else jobMeta.textContent = `${job.frames} frame · ${job.progress.percent || 0}%`;
   renderProgress(job.progress || { percent: 0 });

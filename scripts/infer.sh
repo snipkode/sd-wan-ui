@@ -13,6 +13,14 @@ NAME="${NAME:-wan-$(date +%s)}"
 MODEL_DIR="${MODEL_DIR:-/root/models/wan}"
 OUT_DIR="${OUT_DIR:-/root/out}"
 SD_IMAGE="${SD_IMAGE:-sd-cpu:local}"
+FFMPEG_BIN="${FFMPEG_BIN:-ffmpeg}"
+KEEP_AVI="${KEEP_AVI:-0}"
+
+if [[ "$FRAMES" -gt 1 ]]; then
+    EXT="avi"
+else
+    EXT="png"
+fi
 
 mkdir -p "$OUT_DIR"
 
@@ -33,5 +41,15 @@ docker run --rm \
     -W "$WIDTH" \
     -H "$HEIGHT" \
     --video-frames "$FRAMES" \
-    -o "/output/${NAME}" \
+    -o "/output/${NAME}.${EXT}" \
     -v
+
+if [[ "$FRAMES" -gt 1 ]] && command -v "$FFMPEG_BIN" >/dev/null 2>&1; then
+    if "$FFMPEG_BIN" -y -loglevel error -i "$OUT_DIR/${NAME}.avi" \
+        -c:v libx264 -pix_fmt yuv420p -movflags +faststart -crf 23 \
+        "$OUT_DIR/${NAME}.mp4"; then
+        if [[ "$KEEP_AVI" != "1" ]]; then
+            rm -f "$OUT_DIR/${NAME}.avi"
+        fi
+    fi
+fi

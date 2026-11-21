@@ -9,6 +9,8 @@ const UI_TOKEN = process.env.UI_TOKEN || '';
 const OUT_DIR = path.resolve(process.env.OUT_DIR || '/root/out');
 const MODEL_DIR = path.resolve(process.env.MODEL_DIR || '/root/models/wan');
 const IMAGE = process.env.SD_IMAGE || 'sd-cpu:local';
+const FFMPEG_BIN = process.env.FFMPEG_BIN || 'ffmpeg';
+const KEEP_AVI = process.env.KEEP_AVI === '1';
 const STATE_FILE = path.join(__dirname, 'state.json');
 fs.mkdirSync(OUT_DIR, { recursive: true });
 const HTML = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
@@ -111,7 +113,8 @@ function publicJob() {
     output: job.output,
     prompt: job.prompt,
     frames: job.frames,
-    error: job.error
+    error: job.error,
+    warning: job.warning
   };
 }
 
@@ -123,7 +126,8 @@ function loadState() {
       const j = { ...s.job, proc: null, container: null };
       j.logs = Array.isArray(j.logs) ? j.logs : [];
       j.progress = j.progress || { current: 0, total: 0, percent: 0 };
-      if (['starting', 'running', 'decoding'].includes(j.status)) {
+      j.warning = j.warning || null;
+      if (['starting', 'running', 'decoding', 'encoding'].includes(j.status)) {
         j.status = 'error';
         j.error = 'server restarted while job was running';
         j.finishedAt = j.finishedAt || now();
@@ -220,10 +224,49 @@ function handleOutput(j, buf) {
   }
 }
 
+function transcodeToMp4(aviName, mp4Name) {
+  return new Promise((resolve) => {
+    const src = path.join(OUT_DIR, aviName);
+    const dst = path.join(OUT_DIR, mp4Name);
+    if (!fs.existsSync(src)) return resolve(false);
+
+    const ff = spawn(FFMPEG_BIN, [
+      '-y', '-loglevel', 'error',
+      '-i', src,
+      '-c:v', 'libx264',
+      '-pix_fmt', 'yuv420p',
+      '-movflags', '+faststart',
+      '-crf', '23',
+      dst
+    ], { stdio: ['ignore', 'pipe', 'pipe'] });
+
+    let stderr = '';
+    ff.stderr.on('data', (d) => {
+      stderr += d.toString();
+      if (stderr.length > 4000) stderr = stderr.slice(-4000);
+    });
+    ff.on('error', () => resolve(false));
+    ff.on('close', (code) => {
+      if (code !== 0 || !fs.existsSync(dst) || fs.statSync(dst).size === 0) return resolve(false);
+      if (!KEEP_AVI) {
+        try {
+          fs.unlinkSync(src);
+        } catch {
+          resolve(true);
+          return;
+        }
+      }
+      resolve(true);
+    });
+  });
+}
+
 function startJob(config) {
   const n = ++seq;
   const id = `j${Date.now()}-${n}`;
-  const outputName = `wan-${Date.now()}-${n}.${config.frames > 1 ? 'mp4' : 'png'}`;
+  const baseName = `wan-${Date.now()}-${n}`;
+  const outputName = `${baseName}.${config.frames > 1 ? 'avi' : 'png'}`;
+  const finalName = config.frames > 1 ? `${baseName}.mp4` : outputName;
   const outputPath = `/output/${outputName}`;
   const container = `sd-ui-${id}`.replace(/[^A-Za-z0-9_.-]/g, '-');
 
@@ -239,6 +282,7 @@ function startJob(config) {
     prompt: config.prompt,
     frames: config.frames,
     error: null,
+    warning: null,
     proc: null,
     container
   };
@@ -284,12 +328,27 @@ function startJob(config) {
     saveState();
   });
 
-  proc.on('close', (code) => {
+  proc.on('close', async (code) => {
     if (!job || job.id !== id) return;
-    job.status = code === 0 ? 'done' : 'error';
     job.exitCode = code;
     job.finishedAt = now();
     if (code !== 0 && !job.error) job.error = `docker exit ${code}`;
+
+    if (code === 0 && config.frames > 1) {
+      job.status = 'encoding';
+      broadcast('status', { job: publicJob() });
+      const nativeName = path.basename(job.output || outputName);
+      const ok = await transcodeToMp4(nativeName, finalName);
+      if (ok) {
+        job.output = finalName;
+        broadcast('log', { jobId: job.id, line: `video converted to ${finalName}`, progress: job.progress });
+      } else {
+        job.warning = `ffmpeg gagal; video AVI asli tetap ${nativeName}`;
+        broadcast('log', { jobId: job.id, line: job.warning, progress: job.progress });
+      }
+    }
+
+    job.status = code === 0 ? 'done' : 'error';
     knownFiles = new Set(listFiles().map((f) => f.name));
     broadcast('status', { job: publicJob() });
     broadcast('files', { files: listFiles() });
@@ -309,7 +368,7 @@ async function handleGenerate(req, res) {
     return send(res, 400, { error: `invalid JSON: ${err.message}` });
   }
 
-  if (job && ['starting', 'running', 'decoding'].includes(job.status)) {
+  if (job && ['starting', 'running', 'decoding', 'encoding'].includes(job.status)) {
     return send(res, 409, { error: 'inference masih berjalan', job: publicJob() });
   }
 
@@ -455,7 +514,7 @@ server.listen(PORT, HOST, () => {
 });
 
 function shutdown() {
-  if (job && job.proc && ['starting', 'running', 'decoding'].includes(job.status)) {
+  if (job && job.proc && ['starting', 'running', 'decoding', 'encoding'].includes(job.status)) {
     spawn('docker', ['stop', job.container], { stdio: 'ignore' });
   }
   server.close(() => process.exit(0));
