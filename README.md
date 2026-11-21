@@ -250,21 +250,15 @@ Panel **Pipeline pemrosesan** ditampilkan tepat sebelum log. Panel ini menunjukk
 
 Tahap aktif berwarna biru, tahap selesai hijau, dan tahap gagal merah. Server mengirim field `stage` lewat SSE `status` dan `log`, jadi indikator mengikuti proses asli, bukan hanya menebak dari teks log. Arahkan kursor ke kartu tahap untuk penjelasan lengkap.
 
-## Memahami steps untuk pemula
+## Panduan cepat dalam popup
 
-`steps` adalah jumlah koreksi/denoising yang dilakukan model. Analoginya, `steps=20` berarti model mengoreksi hasilnya sekitar 20 kali sebelum gambar/video dianggap selesai. Semakin tinggi steps, semakin banyak kesempatan model merapikan detail sehingga kualitas biasanya lebih bagus, tetapi waktu proses juga semakin lama dan hampir linear di CPU.
+Semua penjelasan untuk user awam digabung dalam satu popup yang dibuka lewat tombol **Panduan cepat** di bawah form. Isinya:
 
-Panduan ringkas yang juga tampil di UI: `4` untuk coba cepat, `10` untuk seimbang, `20` untuk detail lebih halus. Tooltip bertanda `i` tersedia di label **Kualitas**, **Steps**, panel pipeline, dan panel panduan.
+- **Steps** adalah jumlah koreksi/denoising. `steps=20` berarti model mengoreksi hasilnya sekitar 20 kali. Makin tinggi biasanya makin detail, tapi makin lama dan hampir linear di CPU. Rekomendasi: `4` coba cepat, `10` seimbang, `20` detail halus.
+- **Urutan pipeline** lengkap dengan model di tiap tahap: text encoder → diffusion → VAE → video encode → output.
+- **Kontrol manual**: CFG mengatur kekuatan mengikuti prompt (`6` aman), sampler memakai `euler` karena cepat/stabil di CPU, dan negative prompt berisi hal yang ingin dihindari seperti `blur` atau `watermark`.
 
-## Panduan kontrol manual
-
-Panel **Panduan manual** yang bisa dibuka di UI menjelaskan tiga kontrol lanjutan:
-
-- **CFG** — seberapa keras model menuruti prompt. `6` adalah default aman; nilai kecil membuat prompt mudah diabaikan, nilai besar bisa membuat hasil kaku atau berantakan.
-- **Sampler** — metode eksekusi denoising. UI memakai `euler` karena cepat dan stabil di CPU, sehingga kolomnya dikunci.
-- **Negative prompt** — daftar hal yang ingin dihindari seperti `blur`, `watermark`, atau `text`. Ini pelengkap prompt utama, bukan pengganti, dan sebaiknya tidak terlalu panjang.
-
-Ketiga label juga punya tooltip `i` langsung di form saat mode Manual dipakai.
+Tooltip bertanda `i` juga tetap tersedia langsung di label **Kualitas**, **Steps**, **CFG**, **Sampler**, **Negative prompt**, dan panel pipeline.
 
 ## Menghentikan job
 

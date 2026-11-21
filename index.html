@@ -235,10 +235,15 @@ button {
 .pipeline-step.failed::before { content: '!'; color: var(--red); background: rgba(255, 69, 58, .25); }
 .pipeline-step.skipped { opacity: .3; border-style: dashed; }
 .pipeline-step.skipped::before { content: '–'; }
-.guide { margin-top: 10px; border: 1px solid var(--stroke); border-radius: 12px; background: rgba(118, 118, 128, .08); }
-.guide summary { padding: 9px 12px; color: var(--text); font-size: 11px; font-weight: 650; cursor: pointer; }
-.guide-body { padding: 0 12px 10px; color: var(--muted); font-size: 10px; line-height: 1.5; }
-.guide-body p { margin: 0 0 6px; }
+.guide-trigger { margin-top: 10px; }
+.guide-btn { min-height: 30px; padding: 0 12px; border: 1px solid var(--stroke); border-radius: 999px; color: var(--text); background: rgba(255, 255, 255, .08); font-size: 11px; font-weight: 650; cursor: pointer; }
+.guide-btn:hover { background: rgba(255, 255, 255, .14); }
+.guide-modal { position: relative; width: min(calc(100vw - 24px), 620px); max-height: calc(100vh - 24px); overflow: auto; padding: 18px; color: var(--text); background: rgba(10, 10, 12, .97); border: 1px solid var(--stroke); border-radius: 16px; box-shadow: 0 24px 80px rgba(0, 0, 0, .7); }
+.guide-modal::backdrop { background: rgba(0, 0, 0, .78); backdrop-filter: blur(6px); }
+.guide-modal h2 { margin: 0 36px 12px 0; font-size: 18px; }
+.guide-modal h3 { margin: 16px 0 6px; color: var(--cyan); font-size: 12px; }
+.guide-modal p { margin: 0 0 8px; color: var(--muted); font-size: 11px; line-height: 1.6; }
+.guide-modal code { color: var(--text); }
 .tip { display: inline-grid; place-items: center; width: 13px; height: 13px; margin-left: 4px; border: 1px solid var(--stroke); border-radius: 50%; color: var(--muted); font-size: 9px; font-weight: 800; cursor: help; vertical-align: middle; }
 .log {
   max-height: 130px;
@@ -516,22 +521,9 @@ button {
       </div>
       <button id="genBtn" class="primary" type="submit">Generate Gambar</button>
     </form>
-    <details class="guide" id="stepsGuide">
-      <summary>Panduan cepat: apa itu steps? <span class="tip" title="Steps = jumlah koreksi denoising saat model membuat gambar.">i</span></summary>
-      <div class="guide-body">
-        <p><strong>Steps</strong> adalah jumlah pengulangan koreksi. Analoginya, kalau <code>steps=20</code>, model mengoreksi hasilnya sekitar <strong>20 kali</strong> sebelum gambar/video dianggap selesai.</p>
-        <p>Makin tinggi steps biasanya makin rapi detailnya, tapi makin lama. Makin rendah makin cepat, tapi bisa blur atau kurang sesuai prompt.</p>
-        <p>Rekomendasi CPU: <code>4</code> untuk coba cepat, <code>10</code> untuk seimbang, <code>20</code> kalau butuh detail lebih halus.</p>
-      </div>
-    </details>
-    <details class="guide" id="manualGuide">
-      <summary>Panduan manual: CFG, sampler, negative prompt <span class="tip" title="Penjelasan singkat untuk kontrol di Pengaturan lanjutan.">i</span></summary>
-      <div class="guide-body">
-        <p><strong>CFG</strong> mengatur seberapa keras model menuruti prompt. Nilai <code>6</code> sudah seimbang; kalau terlalu kecil prompt bisa diabaikan, kalau terlalu besar hasil bisa kaku atau berantakan.</p>
-        <p><strong>Sampler</strong> adalah metode untuk mengeksekusi langkah denoising. UI memakai <code>euler</code> karena cepat dan stabil di CPU, jadi kolomnya dikunci.</p>
-        <p><strong>Negative prompt</strong> berisi hal yang tidak ingin muncul, misalnya <code>blur</code>, <code>watermark</code>, atau <code>text</code>. Ini pelengkap prompt utama, bukan pengganti. Kalimat terlalu panjang bisa membuat hasil kurang fokus.</p>
-      </div>
-    </details>
+    <div class="guide-trigger">
+      <button id="guideBtn" class="guide-btn" type="button">Panduan cepat <span class="tip" title="Penjelasan steps, pipeline, CFG, sampler, dan negative prompt.">i</span></button>
+    </div>
     <div class="status">
       <span id="jobStatus" class="badge">idle</span>
       <span id="jobMeta">siap</span>
@@ -566,6 +558,26 @@ button {
     </div>
   </section>
 </main>
+<dialog id="guideModal" class="guide-modal" aria-labelledby="guideTitle">
+  <button id="guideClose" class="lightbox-close" type="button" aria-label="Tutup">×</button>
+  <h2 id="guideTitle">Panduan cepat</h2>
+  <h3>Steps = jumlah koreksi</h3>
+  <p><strong>Steps</strong> adalah jumlah pengulangan koreksi. Kalau <code>steps=20</code>, model mengoreksi hasilnya sekitar <strong>20 kali</strong> sebelum gambar/video selesai.</p>
+  <p>Makin tinggi steps biasanya makin rapi detailnya, tapi makin lama. Makin rendah makin cepat, tapi bisa blur atau kurang cocok dengan prompt. Rekomendasi CPU: <code>4</code> coba cepat, <code>10</code> seimbang, <code>20</code> detail lebih halus.</p>
+  <h3>Urutan pipeline</h3>
+  <ol>
+    <li><strong>Input &amp; config</strong>: prompt, steps, dan ukuran dikirim ke server.</li>
+    <li><strong>Text encoder</strong> <code>umt5-xxl-encoder-Q3_K_S.gguf</code>: teks jadi conditioning.</li>
+    <li><strong>Diffusion sampling</strong> <code>wan2.1_t2v_1.3b-q4_k_m.gguf</code>: koreksi latent sebanyak steps.</li>
+    <li><strong>VAE decode</strong> <code>taew2_1.safetensors</code>: latent jadi piksel/frame.</li>
+    <li><strong>Video encode</strong> <code>ffmpeg</code>: AVI jadi MP4; dilewati untuk mode Gambar.</li>
+    <li><strong>Output &amp; meta</strong> <code>/root/out</code>: file dan detail masuk galeri.</li>
+  </ol>
+  <h3>Kontrol manual</h3>
+  <p><strong>CFG</strong> mengatur seberapa keras model menuruti prompt. <code>6</code> sudah seimbang; terlalu rendah prompt mudah diabaikan, terlalu tinggi hasil bisa kaku atau berantakan.</p>
+  <p><strong>Sampler</strong> adalah metode denoising. UI memakai <code>euler</code> karena cepat dan stabil di CPU, jadi kolomnya dikunci.</p>
+  <p><strong>Negative prompt</strong> berisi hal yang ingin dihindari, misalnya <code>blur</code>, <code>watermark</code>, atau <code>text</code>. Ini pelengkap prompt utama, bukan pengganti, dan sebaiknya tidak terlalu panjang.</p>
+</dialog>
 <dialog id="lightbox" class="lightbox">
   <button id="lightboxClose" class="lightbox-close" type="button" aria-label="Tutup">×</button>
   <button id="lightboxPrev" class="lightbox-nav prev" type="button" aria-label="Sebelumnya">‹</button>
@@ -610,6 +622,9 @@ const lightboxDetails = $('lightboxDetails');
 const lightboxClose = $('lightboxClose');
 const lightboxPrev = $('lightboxPrev');
 const lightboxNext = $('lightboxNext');
+const guideModal = $('guideModal');
+const guideBtn = $('guideBtn');
+const guideClose = $('guideClose');
 const pipelineSteps = $('pipelineSteps');
 const pipelineStage = $('pipelineStage');
 
@@ -1184,6 +1199,13 @@ for (const chip of document.querySelectorAll('.chip')) {
 prevPage.addEventListener('click', () => loadFiles(currentPage - 1));
 nextPage.addEventListener('click', () => loadFiles(currentPage + 1));
 lightboxClose.addEventListener('click', () => lightbox.close());
+guideBtn.addEventListener('click', () => guideModal.showModal());
+guideClose.addEventListener('click', () => guideModal.close());
+guideModal.addEventListener('click', (event) => {
+  const rect = guideModal.getBoundingClientRect();
+  const inside = event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom;
+  if (!inside) guideModal.close();
+});
 lightboxPrev.addEventListener('click', () => showLightbox(lightboxIndex - 1));
 lightboxNext.addEventListener('click', () => showLightbox(lightboxIndex + 1));
 lightbox.addEventListener('close', () => {
