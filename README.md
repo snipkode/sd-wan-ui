@@ -39,8 +39,27 @@ Angka ini berasal dari log `sd-cli`, bukan benchmark sintetis.
 | --- | --- |
 | 9 frame, 320x256, 4 step | `generate_video completed in 112.79s` |
 | 5 frame, 320x256, 2 step | `generate_video completed in 67.85s` |
-| 29 frame, 512x320, 20 step | Rata-rata **108.87 detik/step** pada 14 step pertama; min 95.55s, max 136.25s |
+| 29 frame, 512x320, 20 step | Rata-rata **113.89 detik/step** pada 19 step teramati; min 95.55s, max 148.71s |
 | Beban model | 3727.48 MB weight; T5 compute buffer 297 MB; Wan compute buffer 249.25 MB |
+
+### Berapa lama tambah 1 step?
+
+`steps` adalah jumlah iterasi denoising. Total waktu kira-kira:
+
+```text
+total ≈ overhead model + T5 + decode + (steps × detik/step)
+```
+
+Overhead tetap di host ini sekitar 40–50 detik: load model ±7 detik, T5 conditioning ±35.7 detik, decode TAEHV ±10 detik. Jadi menambah `1 step` hanya menambah biaya satu iterasi, bukan mengulang seluruh overhead.
+
+| Konfigurasi | Tambah 1 step |
+| --- | --- |
+| 5 frame, 320x256 | ±14–16 detik |
+| 9 frame, 320x256 | ±16–20 detik |
+| 29 frame, 512x320 | ±96–149 detik, rata-rata ±114 detik |
+| 161 frame, 512x320 | estimasi kasar ±10–12 menit per step |
+
+Contoh: menaikkan `steps` dari 20 ke 21 pada job 29 frame/512x320 menambah sekitar **114 detik**. Total 20 step ≈38 menit, 21 step ≈40 menit. Estimasi 161 frame dihitung linear dari 29 frame dan belum diuji langsung.
 
 CPU AMD EPYC 9355P terlihat modern dan mendukung AVX-512, tetapi hanya 2 vCPU yang dilewatkan ke VM dan tidak ada GPU. Swap mulai terpakai saat inference video 512x320/20 step, jadi jangan menjalankan dua job bersamaan. Disk juga kritikal, lakukan cleanup sebelum preset 25 detik ke atas.
 
