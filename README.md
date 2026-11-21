@@ -10,6 +10,51 @@ UI web ringan untuk menjalankan inference **Wan 2.1 T2V 1.3B Q4_K_M** lewat `sta
 - Mode: `-M vid_gen`. `frames=1` menghasilkan PNG; `frames>1` menghasilkan video.
 - UI: vanilla HTML/CSS/JS, responsive Apple-like, dilengkapi filter Semua/Gambar/Video.
 
+## Spesifikasi & benchmark VPS
+
+Diukur 2026-11-21 pada host yang menjalankan UI ini.
+
+| Item | Nilai |
+| --- | --- |
+| IP publik | `72.60.237.147` |
+| OS | Ubuntu 24.04.4 LTS (Noble Numbat) |
+| Kernel | Linux 6.8.0-147-generic |
+| Virtualisasi | KVM full, BIOS QEMU `pc-i440fx-11.0` |
+| CPU | AMD EPYC 9355P 32-Core Processor, **2 vCPU** tersedia |
+| Arsitektur | x86_64, 1 socket, 2 core, 1 thread/core |
+| CPU flags | AVX2, AVX-512, FMA, BMI2, SHA-NI, AES-NI |
+| Cache | L1d 128 KiB x2, L1i 128 KiB x2, L2 1 MiB x2, L3 32 MiB |
+| BogoMIPS | 7089.34 |
+| RAM | 7.8 GiB total; 6.1 GiB terpakai; 1.7 GiB available saat inference |
+| Swap | 2.0 GiB total; 1.1 GiB terpakai saat inference |
+| Disk | 96 G total; 261 M free; 100% terpakai |
+| Penggunaan disk | model 3.7 G, `/root/out` ~1 M, repo 604 K |
+| Docker | 29.9.2 |
+| GPU | Tidak ada; tidak ada CUDA/Vulkan |
+
+### Benchmark inference nyata
+
+Angka ini berasal dari log `sd-cli`, bukan benchmark sintetis.
+
+| Konfigurasi | Hasil |
+| --- | --- |
+| 9 frame, 320x256, 4 step | `generate_video completed in 112.79s` |
+| 5 frame, 320x256, 2 step | `generate_video completed in 67.85s` |
+| 29 frame, 512x320, 20 step | Rata-rata **108.87 detik/step** pada 14 step pertama; min 95.55s, max 136.25s |
+| Beban model | 3727.48 MB weight; T5 compute buffer 297 MB; Wan compute buffer 249.25 MB |
+
+CPU AMD EPYC 9355P terlihat modern dan mendukung AVX-512, tetapi hanya 2 vCPU yang dilewatkan ke VM dan tidak ada GPU. Swap mulai terpakai saat inference video 512x320/20 step, jadi jangan menjalankan dua job bersamaan. Disk juga kritikal, lakukan cleanup sebelum preset 25 detik ke atas.
+
+Untuk mengecek ulang:
+
+```bash
+lscpu
+free -h
+df -h /
+docker version --format '{{.Server.Version}}'
+curl -s http://127.0.0.1:3001/api/status
+```
+
 ## Arsitektur
 
 ```mermaid
