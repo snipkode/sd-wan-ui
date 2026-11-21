@@ -13,6 +13,9 @@ services:
       UI_TOKEN: ${UI_TOKEN:-}
       MODEL_DIR: /models
       OUT_DIR: /output
+      INPUT_DIR: /input
+      INPAINT_MODEL_DIR: /inpaint
+      INPAINT_MODEL_NAME: ${INPAINT_MODEL_NAME:-stable-diffusion-v1-5-inpainting-Q4_0.gguf}
       STATE_FILE: /app/runtime/state.json
       SD_RUNNER: local
       SD_CLI_BIN: /sd.cpp/bin/sd-cli
@@ -22,6 +25,8 @@ services:
       KEEP_AVI: ${KEEP_AVI:-0}
     volumes:
       - ./models:/models
+      - ./models/inpaint:/inpaint:ro
+      - ./input:/input
       - ./out:/output
       - ./runtime:/app/runtime
     restart: unless-stopped

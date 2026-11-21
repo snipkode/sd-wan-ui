@@ -15,6 +15,11 @@ services:
       OUT_HOST_DIR: ${OUT_HOST_DIR:-${PWD}/out}
       MODEL_DIR: /app/models
       MODEL_HOST_DIR: ${MODEL_HOST_DIR:-${PWD}/models}
+      INPUT_DIR: /app/input
+      INPUT_HOST_DIR: ${INPUT_HOST_DIR:-${PWD}/input}
+      INPAINT_MODEL_DIR: /inpaint
+      INPAINT_MODEL_HOST_DIR: ${INPAINT_MODEL_HOST_DIR:-${PWD}/models/inpaint}
+      INPAINT_MODEL_NAME: ${INPAINT_MODEL_NAME:-stable-diffusion-v1-5-inpainting-Q4_0.gguf}
       STATE_FILE: /app/runtime/state.json
       SD_IMAGE: ${SD_IMAGE:-snipkode/sd-wan-infer:latest}
       SD_BACKEND: ${SD_BACKEND:-cpu}
@@ -26,6 +31,8 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./models:/app/models
+      - ./models/inpaint:/inpaint:ro
+      - ./input:/app/input
       - ./out:/app/out
       - ./runtime:/app/runtime
     restart: unless-stopped

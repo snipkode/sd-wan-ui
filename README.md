@@ -160,7 +160,8 @@ flowchart LR
 | `docker-compose.all.yml` | Compose all-in-one tanpa Docker socket |
 | `docker-compose.offline.yml` | Compose image offline dengan model sudah termasuk di image |
 | `.env.compose.example` | Contoh env untuk alur Docker Compose |
-| `scripts/download-models.sh` | Download model ke `MODEL_DIR` |
+| `scripts/download-models.sh` | Download model Wan ke `MODEL_DIR` |
+| `scripts/download-inpaint-model.sh` | Download model SD1.5 inpainting GGUF ke `MODEL_DIR` terpisah |
 | `README.model-alternatives.md` | Panduan quant, VAE, dan varian model alternatif yang kompatibel |
 | `scripts/build-image.sh` | Build image inference `sd-cpu:local` |
 | `scripts/build-ui-image.sh` | Build image UI `sd-wan-ui:local` |
@@ -225,14 +226,15 @@ Backend dipilih otomatis sebagai CPU. Tidak ada flag CUDA/Vulkan karena host tid
 
 Untuk video, server meminta `.avi` ke `sd-cli`, lalu setelah container selesai menjalankan `ffmpeg` untuk menghasilkan `.mp4` H.264/yuv420p yang bisa diputar browser. AVI asli dihapus kecuali `KEEP_AVI=1`. Jika `ffmpeg` tidak tersedia, AVI tetap disimpan dan UI menampilkan warning.
 
-## Mode generate: Gambar / Video
+## Mode generate: Gambar / Video / Outfit
 
-UI menyediakan toggle **Gambar** / **Video** di bagian atas form. Default adalah **Gambar**.
+UI menyediakan toggle **Gambar** / **Video** / **Outfit** di bagian atas form. Default adalah **Gambar**.
 
 - **Gambar**: `frames` dikunci ke `1`, selector durasi disembunyikan, dan tombol berubah menjadi **Generate Gambar**. Preset kualitas tetap dipakai untuk mengisi `steps` dan `cfg`; ukuran diatur terpisah lewat kontrol Ukuran/Orientasi.
 - **Video**: selector durasi aktif, minimal `frames` menjadi `2`, dan tombol berubah menjadi **Generate Video**. Jika `frames` masih `1` saat berpindah ke mode video, nilai diisi `9` sebagai default cepat.
+- **Outfit**: toggle Preset/Manual dan prompt utama disembunyikan; form khusus muncul untuk upload foto karakter, prompt outfit, strength, ukuran, steps/CFG, dan empat slider area baju. Tombol berubah menjadi **Ganti Outfit**.
 
-Toggle ini hanya mengubah UI dan payload yang dikirim; backend tetap menentukan gambar/video dari nilai `frames`.
+Toggle Gambar/Video hanya mengubah UI dan payload yang dikirim; backend tetap menentukan gambar/video dari nilai `frames`. Mode Outfit memakai endpoint terpisah `POST /api/outfit` dan model inpainting yang tidak ikut di image.
 
 Di sebelahnya ada toggle **Preset / Manual**. Default **Preset** menampilkan durasi, kualitas, **Orientasi** (Lanskap/Potret), dan **Ukuran** dengan tiga pilihan:
 
@@ -241,6 +243,18 @@ Di sebelahnya ada toggle **Preset / Manual**. Default **Preset** menampilkan dur
 - **Manual** — menampilkan input lebar dan tinggi sendiri. Nilai harus 256–1024 px dan kelipatan 16, sama seperti validasi backend.
 
 Pilihan ukuran apa pun tetap mengisi `width`/`height` yang dikirim ke backend. **Manual** menyembunyikan preset, menampilkan `frames`/`steps`, dan membuka **Pengaturan lanjutan** berisi CFG, width, height, serta negative prompt.
+
+### Outfit swap / inpainting
+
+Mode **Outfit** mengganti pakaian tanpa mengganti identitas karakter. Foto diunggah, di-resize/pad ke ukuran target, lalu area baju dari slider diubah menjadi mask PNG: putih = area yang diganti model, hitam = area yang dipertahankan. Karena mask masih berupa kotak, sesuaikan slider agar tidak menimpa wajah, tangan, atau rambut.
+
+Model yang dipakai bukan model Wan, melainkan SD1.5 inpainting GGUF. Download dulu jika mode ini akan dipakai:
+
+```bash
+MODEL_DIR="$PWD/models/inpaint" ./scripts/download-inpaint-model.sh
+```
+
+File defaultnya `stable-diffusion-v1-5-inpainting-Q4_0.gguf` (~1.75 GB). Model tidak dibundling karena image offline saat ini hanya berisi model Wan; mount `./models/inpaint` ke `/inpaint` seperti pada contoh Compose di bawah.
 
 ## Estimasi proses selesai
 
@@ -371,7 +385,8 @@ curl -X POST http://127.0.0.1:3001/api/generate \
 | `GET` | `/api/files` | Daftar file hasil |
 | `GET` | `/api/presets` | Daftar preset durasi/kualitas video |
 | `GET` | `/api/stream` | SSE realtime |
-| `POST` | `/api/generate` | Memulai inference |
+| `POST` | `/api/generate` | Memulai inference Wan |
+| `POST` | `/api/outfit` | Memulai inpainting outfit dari `multipart/form-data` |
 | `POST` | `/api/cancel` | Menghentikan job aktif |
 | `POST` | `/api/delete` | Menghapus file hasil |
 | `GET` | `/out/<nama>` | Mengirim PNG/MP4/WebM/AVI, support Range |
@@ -389,6 +404,24 @@ curl -X POST http://127.0.0.1:3001/api/generate \
     "height": 256,
     "cfg": 6
   }'
+```
+
+Contoh outfit swap lewat API:
+
+```bash
+curl -X POST http://127.0.0.1:3001/api/outfit \
+  -F 'image=@foto-karakter.png' \
+  -F 'prompt=same person, futuristic streetwear jacket, consistent face and body' \
+  -F 'negative=blurry, low quality, deformed body, extra limbs' \
+  -F 'steps=20' \
+  -F 'width=512' \
+  -F 'height=640' \
+  -F 'cfg=6' \
+  -F 'strength=0.95' \
+  -F 'left=25' \
+  -F 'top=30' \
+  -F 'right=75' \
+  -F 'bottom=95'
 ```
 
 Event SSE:
@@ -414,6 +447,11 @@ Salin `.env.example` menjadi `.env`, lalu sesuaikan:
 | `MODEL_DIR` | `/root/models/wan` | Direktori model GGUF/TAEHV yang dilihat UI |
 | `OUT_HOST_DIR` | `OUT_DIR` | Path host yang di-mount ke `/output` container inference |
 | `MODEL_HOST_DIR` | `MODEL_DIR` | Path host yang di-mount ke `/models` container inference |
+| `INPUT_DIR` | `<repo>/input` | Direktori foto/mask sementara untuk outfit swap |
+| `INPUT_HOST_DIR` | `INPUT_DIR` | Path host yang di-mount ke `/input` container inference |
+| `INPAINT_MODEL_DIR` | `/root/models/inpaint` | Direktori model inpainting yang dilihat UI |
+| `INPAINT_MODEL_HOST_DIR` | `INPAINT_MODEL_DIR` | Path host yang di-mount ke `/inpaint` container inference |
+| `INPAINT_MODEL_NAME` | `stable-diffusion-v1-5-inpainting-Q4_0.gguf` | Nama file model inpainting |
 | `STATE_FILE` | `state.json` | Lokasi state job persist |
 | `SD_ALL_IMAGE` | `snipkode/sd-wan:latest` | Image all-in-one untuk `docker-compose.all.yml` |
 | `SD_UI_IMAGE` | `snipkode/sd-wan-ui:latest` | Image UI untuk Docker Compose mode split |
@@ -424,7 +462,7 @@ Salin `.env.example` menjadi `.env`, lalu sesuaikan:
 | `GPU_DEVICES` | `all` | Nilai `--gpus` Docker saat backend CUDA |
 | `VULKAN_DEVICE` | `/dev/dri` | Device Docker saat backend Vulkan/AMD/Intel |
 | `SD_EXTRA_ARGS` | kosong | Argumen CLI tambahan, misalnya `--max-vram 8` |
-| `FFMPEG_BIN` | `ffmpeg` | Path binary ffmpeg untuk konversi AVI → MP4 |
+| `FFMPEG_BIN` | `ffmpeg` | Path binary ffmpeg untuk konversi AVI → MP4 dan pembuatan source/mask outfit |
 | `KEEP_AVI` | `0` | Set `1` untuk menyimpan AVI asli setelah konversi |
 
 Jika `UI_TOKEN` kosong, UI terbuka tanpa auth. Untuk deployment publik, disarankan mengisinya dan menaruh reverse proxy dengan TLS di depan.
@@ -448,14 +486,15 @@ Untuk memakai GPU nanti: siapkan image CUDA/Vulkan, set `SD_IMAGE=sd-gpu:local`,
 
 ### Opsi 1 — full offline portable (paling mudah)
 
-Image `snipkode/sd-wan-offline:latest` berisi UI, `sd-cli`, ffmpeg, **dan ketiga model Wan (~3.7 GB)** di dalam image. Tidak perlu download model dan tidak perlu mount `./models`.
+Image `snipkode/sd-wan-offline:latest` berisi UI, `sd-cli`, ffmpeg, **dan ketiga model Wan (~3.7 GB)** di dalam image. Model inpainting untuk mode Outfit belum dibundling, jadi perlu diunduh dan di-mount terpisah jika fitur itu dipakai.
 
 Dengan Compose:
 
 ```bash
 git clone https://github.com/snipkode/sd-wan-ui.git
 cd sd-wan-ui
-mkdir -p out runtime
+mkdir -p models/inpaint input out runtime
+MODEL_DIR="$PWD/models/inpaint" ./scripts/download-inpaint-model.sh
 cp .env.compose.example .env
 docker compose -f docker-compose.offline.yml up -d
 ```
@@ -463,16 +502,19 @@ docker compose -f docker-compose.offline.yml up -d
 Tanpa Compose:
 
 ```bash
-mkdir -p out runtime
+mkdir -p models/inpaint input out runtime
+MODEL_DIR="$PWD/models/inpaint" ./scripts/download-inpaint-model.sh
 docker run -d --name sd-wan-offline --restart unless-stopped \
   -p 3001:3001 \
+  -v "$PWD/models/inpaint:/inpaint:ro" \
+  -v "$PWD/input:/input" \
   -v "$PWD/out:/output" \
   -v "$PWD/runtime:/app/runtime" \
   -e UI_TOKEN="${UI_TOKEN:-}" \
   snipkode/sd-wan-offline:latest
 ```
 
-Buka `http://<host>:3001`. Model sudah ada di `/models` di dalam image; `./out` dipakai untuk hasil dan `./runtime` untuk `state.json`.
+Buka `http://<host>:3001`. Model Wan sudah ada di `/models` di dalam image; `./models/inpaint` dipakai untuk mode Outfit, `./input` untuk foto/mask, `./out` untuk hasil, dan `./runtime` untuk `state.json`.
 
 ```bash
 curl http://127.0.0.1:3001/api/health
@@ -495,8 +537,9 @@ Dengan Compose:
 ```bash
 git clone https://github.com/snipkode/sd-wan-ui.git
 cd sd-wan-ui
-mkdir -p models out runtime
+mkdir -p models models/inpaint input out runtime
 MODEL_DIR="$PWD/models" ./scripts/download-models.sh
+MODEL_DIR="$PWD/models/inpaint" ./scripts/download-inpaint-model.sh
 cp .env.compose.example .env
 docker compose -f docker-compose.all.yml up -d
 ```
@@ -504,11 +547,14 @@ docker compose -f docker-compose.all.yml up -d
 Tanpa Compose, pakai `docker run` biasa:
 
 ```bash
-mkdir -p models out runtime
+mkdir -p models models/inpaint input out runtime
 MODEL_DIR="$PWD/models" ./scripts/download-models.sh
+MODEL_DIR="$PWD/models/inpaint" ./scripts/download-inpaint-model.sh
 docker run -d --name sd-wan --restart unless-stopped \
   -p 3001:3001 \
   -v "$PWD/models:/models:ro" \
+  -v "$PWD/models/inpaint:/inpaint:ro" \
+  -v "$PWD/input:/input" \
   -v "$PWD/out:/output" \
   -v "$PWD/runtime:/app/runtime" \
   -e UI_TOKEN="${UI_TOKEN:-}" \
@@ -527,7 +573,7 @@ docker run --rm snipkode/sd-wan:latest sd --help
 docker compose -f docker-compose.all.yml down
 ```
 
-Model tidak ikut di image `sd-wan` karena ukurannya ~3.7 GB. Mount `./models` ke `/models`, `./out` ke `/output`, dan `./runtime` ke `/app/runtime`.
+Model tidak ikut di image `sd-wan` karena ukurannya ~3.7 GB. Mount `./models` ke `/models`, `./models/inpaint` ke `/inpaint`, `./input` ke `/input`, `./out` ke `/output`, dan `./runtime` ke `/app/runtime`. Mode Outfit tetap bisa dipakai walau model inpainting belum diunduh; permintaan akan ditolak dengan jelas sampai file tersedia.
  State job tersimpan di `runtime/state.json`, jadi tidak hilang saat container di-recreate. Image all-in-one ini default CPU; untuk GPU pakai opsi dua image di bawah dengan image inference CUDA/Vulkan.
 
 Jika memakai akun Docker Hub lain, ubah `SD_ALL_IMAGE` di `.env`, atau override:
@@ -557,7 +603,7 @@ SD_IMAGE=username/sd-wan-infer:latest \
 docker compose up -d
 ```
 
-Di mode ini UI melihat model sebagai `/app/models` dan hasil sebagai `/app/out`; container inference menerima path host lewat `MODEL_HOST_DIR`/`OUT_HOST_DIR`. Gunakan `docker compose logs -f ui` untuk log UI.
+Di mode ini UI melihat model sebagai `/app/models`, hasil sebagai `/app/out`, foto/mask sebagai `/app/input`, dan model inpainting sebagai `/inpaint`; container inference menerima path host lewat `MODEL_HOST_DIR`, `OUT_HOST_DIR`, `INPUT_HOST_DIR`, dan `INPAINT_MODEL_HOST_DIR`. Buat direktori `models/inpaint` dan `input`, lalu jalankan `MODEL_DIR="$PWD/models/inpaint" ./scripts/download-inpaint-model.sh` sebelum memakai mode Outfit. Gunakan `docker compose logs -f ui` untuk log UI.
 
 Set `UI_TOKEN` di `.env` sebelum mengekspos UI ke jaringan yang tidak dipercaya. Mount `/var/run/docker.sock` setara dengan akses root ke Docker host, jadi jangan dijalankan untuk pihak yang tidak dipercaya. Untuk GPU, siapkan image inference CUDA/Vulkan dan set `SD_IMAGE` serta `SD_BACKEND=cuda0` atau `vulkan0` di `.env`.
 
@@ -755,6 +801,7 @@ Pada host uji, 9 frame `320x256` dengan 4 step memakan waktu sekitar **113 detik
 sd-wan-ui/
 ├── Dockerfile
 ├── README.md
+├── README.model-alternatives.md
 ├── .env.example
 ├── .gitignore
 ├── index.html
@@ -762,6 +809,7 @@ sd-wan-ui/
 └── scripts/
     ├── build-image.sh
     ├── download-models.sh
+    ├── download-inpaint-model.sh
     ├── infer.sh
     └── start-ui.sh
 ```

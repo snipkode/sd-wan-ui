@@ -142,6 +142,11 @@ small { display: block; font-size: 10px; margin-top: 4px; line-height: 1.35; }
 .mode.compact button { min-height: 30px; padding: 0 8px; font-size: 10px; }
 .preset .wide { grid-column: 1 / -1; }
 .custom-size { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.outfit-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+.outfit-grid .wide { grid-column: 1 / -1; }
+.outfit-grid small { display: block; margin-top: 4px; color: var(--muted); }
+.mask-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.mask-grid input { width: 100%; }
 .quick { margin-top: 10px; }
 details { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--stroke); }
 summary {
@@ -178,6 +183,7 @@ button {
 .primary:active { transform: scale(.985); }
 .primary:disabled { opacity: .55; cursor: not-allowed; box-shadow: none; }
 .mode { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 4px; border: 1px solid rgba(255, 255, 255, .06); border-radius: 14px; background: rgba(118, 118, 128, .16); }
+.mode.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .mode button { min-height: 36px; border-radius: 10px; color: var(--muted); background: transparent; font-size: 13px; font-weight: 600; transition: background .18s ease, color .18s ease; }
 .mode button.active { color: var(--text); background: rgba(255, 255, 255, .15); box-shadow: 0 1px 4px rgba(0, 0, 0, .28); }
 .status {
@@ -458,7 +464,9 @@ button {
   textarea, input, select { min-height: 44px; font-size: 16px; }
   textarea { min-height: 96px; }
   .mode button { min-height: 38px; }
+  .mode.three button { font-size: 11px; }
   .preset { margin-top: 14px; }
+  .mask-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .primary { min-height: 48px; }
   .status { margin-top: 16px; padding-top: 16px; }
   .pipeline-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -487,8 +495,8 @@ button {
   .surface { padding: 14px; }
   .control-bar { grid-template-columns: 1fr; }
   .pipeline-steps { grid-template-columns: 1fr; }
-  .preset, .quick, .adv { grid-template-columns: 1fr; }
-  .adv .wide { grid-column: auto; }
+  .preset, .quick, .adv, .outfit-grid, .mask-grid { grid-template-columns: 1fr; }
+  .outfit-grid .wide, .adv .wide { grid-column: auto; }
   .filters { width: 100%; }
 }
 </style>
@@ -515,12 +523,13 @@ button {
         <div class="control-bar">
           <div>
             <span class="control-label">Jenis</span>
-            <div class="mode" role="group" aria-label="Mode generate">
+            <div class="mode three" role="group" aria-label="Mode generate">
               <button type="button" id="modeImage" class="active" aria-pressed="true">Gambar</button>
               <button type="button" id="modeVideo" aria-pressed="false">Video</button>
+              <button type="button" id="modeOutfit" aria-pressed="false">Outfit</button>
             </div>
           </div>
-          <div>
+          <div id="configGroup">
             <span class="control-label">Konfigurasi</span>
             <div class="mode" role="group" aria-label="Sumber konfigurasi">
               <button type="button" id="configPreset" class="active" aria-pressed="true">Preset</button>
@@ -529,9 +538,69 @@ button {
           </div>
         </div>
       </div>
-      <div class="gen-group">
+      <div class="gen-group" id="promptGroup">
         <label for="prompt" class="prompt-label">Prompt</label>
         <textarea id="prompt" maxlength="500" spellcheck="false">a lovely cat walking in neon rain, cinematic lighting, shallow depth of field</textarea>
+      </div>
+      <div class="gen-group" id="outfitPanel" hidden>
+        <div class="outfit-grid">
+          <div class="wide">
+            <label for="outfitImage">Foto karakter</label>
+            <input id="outfitImage" type="file" accept="image/png,image/jpeg,image/webp">
+            <small>PNG, JPG, atau WEBP maksimal 16MB. Wajah dan bentuk tubuh akan dipertahankan.</small>
+          </div>
+          <div class="wide">
+            <label for="outfitPrompt">Prompt outfit</label>
+            <textarea id="outfitPrompt" maxlength="500" spellcheck="false">same person, futuristic streetwear jacket, detailed fabric, natural pose, consistent face and body, cinematic lighting</textarea>
+          </div>
+          <div>
+            <label for="outfitStrength">Kekuatan ubah baju</label>
+            <input id="outfitStrength" type="range" min="0.3" max="1" step="0.05" value="0.95">
+            <small>Makin tinggi makin bebas mengganti outfit.</small>
+          </div>
+          <div>
+            <label for="outfitNegative">Negative prompt</label>
+            <input id="outfitNegative" maxlength="500" value="blurry, low quality, watermark, text, deformed body, extra limbs">
+          </div>
+          <div>
+            <label for="outfitWidth">Lebar</label>
+            <input id="outfitWidth" type="number" min="256" max="1024" step="16" value="512">
+          </div>
+          <div>
+            <label for="outfitHeight">Tinggi</label>
+            <input id="outfitHeight" type="number" min="256" max="1024" step="16" value="640">
+          </div>
+          <div>
+            <label for="outfitSteps">Steps</label>
+            <input id="outfitSteps" type="number" min="1" max="50" value="20">
+          </div>
+          <div>
+            <label for="outfitCfg">CFG</label>
+            <input id="outfitCfg" type="number" min="0" max="20" step="0.5" value="6">
+          </div>
+          <div class="wide">
+            <span class="control-label">Area baju (mask)</span>
+            <div class="mask-grid">
+              <div>
+                <label for="maskLeft">Kiri %</label>
+                <input id="maskLeft" type="number" min="0" max="90" value="25">
+              </div>
+              <div>
+                <label for="maskTop">Atas %</label>
+                <input id="maskTop" type="number" min="0" max="90" value="30">
+              </div>
+              <div>
+                <label for="maskRight">Kanan %</label>
+                <input id="maskRight" type="number" min="5" max="100" value="75">
+              </div>
+              <div>
+                <label for="maskBottom">Bawah %</label>
+                <input id="maskBottom" type="number" min="5" max="100" value="95">
+              </div>
+            </div>
+            <small>Area putih akan diganti model; area hitam dipertahankan. Sesuaikan sampai menutup pakaian tanpa wajah atau tangan.</small>
+          </div>
+        </div>
       </div>
       <div class="gen-group" id="presetPanel">
         <div class="preset" id="presetRow">
@@ -718,8 +787,12 @@ const presetPanel = $('presetPanel');
 const manualPanel = $('manualPanel');
 const configPreset = $('configPreset');
 const configManual = $('configManual');
+const configGroup = $('configGroup');
+const promptGroup = $('promptGroup');
+const outfitPanel = $('outfitPanel');
 const modeImage = $('modeImage');
 const modeVideo = $('modeVideo');
+const modeOutfit = $('modeOutfit');
 const pagination = $('pagination');
 const prevPage = $('prevPage');
 const nextPage = $('nextPage');
@@ -775,7 +848,22 @@ const PIPELINE = [
   { id: 'output', title: 'Output & meta', model: '/root/out · .json', short: 'Simpan file + detail.', detail: 'File akhir dan sidecar JSON berisi prompt, ukuran, steps, dan durasi proses disimpan lalu masuk galeri.' }
 ];
 
+const PIPELINE_OUTFIT = [
+  { id: 'input', title: 'Foto & mask', model: 'ffmpeg', short: 'Foto + area baju jadi PNG.', detail: 'Foto karakter di-resize ke ukuran target, lalu area baju dari slider diubah jadi mask putih; bagian lain hitam dan akan dipertahankan.' },
+  { id: 'text', title: 'Prompt outfit', model: 'CLIP / SD1.5', short: 'Prompt jadi conditioning.', detail: 'Prompt outfit diproses model teks SD1.5 untuk memberi arah karakter pakaian baru.' },
+  { id: 'sampling', title: 'Inpainting', model: 'sd-v1-5-inpainting Q4_0', short: 'Isi ulang area mask.', detail: 'Model inpainting mengganti hanya area putih pada mask sambil menjaga wajah, tangan, dan bentuk tubuh di area hitam.' },
+  { id: 'vae', title: 'VAE decode', model: 'SD VAE', short: 'Latent jadi piksel.', detail: 'Hasil latent diffusion diterjemahkan menjadi gambar PNG akhir.' },
+  { id: 'output', title: 'Output & meta', model: '/root/out · .json', short: 'Simpan file + detail.', detail: 'Gambar akhir dan sidecar JSON berisi prompt, ukuran, strength, mask, dan durasi proses disimpan lalu masuk galeri.' }
+];
+
+function activePipeline() {
+  const busy = currentJob && ACTIVE_STATUSES.includes(currentJob.status);
+  if (busy && currentJob.kind) return currentJob.kind === 'outfit' ? PIPELINE_OUTFIT : PIPELINE;
+  return generateMode === 'outfit' ? PIPELINE_OUTFIT : PIPELINE;
+}
+
 function generatorLabel() {
+  if (generateMode === 'outfit') return 'Ganti Outfit';
   return generateMode === 'image' ? 'Generate Gambar' : 'Generate Video';
 }
 
@@ -827,7 +915,8 @@ function updateEta() {
 }
 
 function renderPipelineShell() {
-  pipelineSteps.innerHTML = PIPELINE.map((step, i) => `<li class="pipeline-step" data-stage="${step.id}" data-index="${i + 1}" title="${step.detail}"><strong>${step.title}</strong><code>${step.model}</code><small>${step.short}</small></li>`).join('');
+  const steps = activePipeline();
+  pipelineSteps.innerHTML = steps.map((step, i) => `<li class="pipeline-step" data-stage="${step.id}" data-index="${i + 1}" title="${step.detail}"><strong>${step.title}</strong><code>${step.model}</code><small>${step.short}</small></li>`).join('');
   updatePipeline(currentJob);
 }
 
@@ -839,15 +928,16 @@ function notePipeline(stage, line) {
     updatePipeline(currentJob);
     return;
   }
-  const step = PIPELINE.find((item) => item.id === stage);
+  const step = activePipeline().find((item) => item.id === stage);
   pipelineStage.textContent = step ? step.title : stage;
   pipelineStage.title = pipelineDetail;
 }
 
 function updatePipeline(job) {
+  const steps = activePipeline();
   const frames = Number(job && job.frames) || Number($('frames').value) || 1;
-  const isVideo = frames > 1;
-  const current = job && job.stage ? PIPELINE.findIndex((item) => item.id === job.stage) : -1;
+  const isVideo = frames > 1 && !(job && job.kind === 'outfit');
+  const current = job && job.stage ? steps.findIndex((item) => item.id === job.stage) : -1;
   const finished = Boolean(job && job.status === 'done');
   const failed = Boolean(job && ['error', 'stopped', 'stopping'].includes(job.status));
   const activeIndex = Math.max(0, current);
@@ -858,14 +948,14 @@ function updatePipeline(job) {
     pipelineStage.textContent = 'selesai · output tersimpan';
     pipelineStage.removeAttribute('title');
   } else {
-    const step = PIPELINE[activeIndex] || PIPELINE[0];
+    const step = steps[activeIndex] || steps[0];
     const pct = job.status === 'running' && job.progress && job.progress.percent ? ` · ${job.progress.percent}%` : '';
     pipelineStage.textContent = `${step.title}${pct}${failed ? ` · ${job.status}` : ''}`;
     if (pipelineDetail) pipelineStage.title = pipelineDetail;
     else pipelineStage.removeAttribute('title');
   }
   Array.from(pipelineSteps.children).forEach((el, i) => {
-    const skipped = PIPELINE[i].id === 'video' && !isVideo;
+    const skipped = steps[i].id === 'video' && !isVideo;
     const done = !skipped && (finished || (current >= 0 && i < current));
     const active = !skipped && !finished && !failed && Boolean(job) && i === activeIndex;
     const bad = !skipped && failed && Boolean(job) && i === activeIndex;
@@ -1024,25 +1114,36 @@ async function loadPresets() {
 }
 
 function setMode(mode) {
-  generateMode = mode === 'video' ? 'video' : 'image';
+  generateMode = mode === 'video' ? 'video' : mode === 'outfit' ? 'outfit' : 'image';
   const isImage = generateMode === 'image';
+  const isVideo = generateMode === 'video';
+  const isOutfit = generateMode === 'outfit';
   modeImage.classList.toggle('active', isImage);
-  modeVideo.classList.toggle('active', !isImage);
+  modeVideo.classList.toggle('active', isVideo);
+  modeOutfit.classList.toggle('active', isOutfit);
   modeImage.setAttribute('aria-pressed', String(isImage));
-  modeVideo.setAttribute('aria-pressed', String(!isImage));
+  modeVideo.setAttribute('aria-pressed', String(isVideo));
+  modeOutfit.setAttribute('aria-pressed', String(isOutfit));
   const busy = currentJob && ACTIVE_STATUSES.includes(currentJob.status);
   genBtn.textContent = busy ? 'Generating…' : generatorLabel();
-  presetDuration.parentElement.hidden = isImage;
-  presetRow.classList.toggle('single', isImage);
-  presetDuration.disabled = isImage;
-  $('frames').disabled = isImage;
-  $('frames').min = isImage ? '1' : '2';
-  if (isImage) $('frames').value = '1';
+  configGroup.hidden = isOutfit;
+  promptGroup.hidden = isOutfit;
+  outfitPanel.hidden = !isOutfit;
+  presetPanel.hidden = isOutfit || configMode !== 'preset';
+  manualPanel.hidden = isOutfit || configMode !== 'manual';
+  presetDuration.parentElement.hidden = !isVideo;
+  presetRow.classList.toggle('single', !isVideo);
+  presetDuration.disabled = !isVideo;
+  $('frames').disabled = !isVideo;
+  $('frames').min = isVideo ? '2' : '1';
+  if (!isVideo) $('frames').value = '1';
   else if (Number($('frames').value) < 2) $('frames').value = '9';
-  applyPreset();
-  if (!presetData) presetHint.textContent = isImage
+  if (!isOutfit) setConfigMode(configMode);
+  if (isOutfit) presetHint.textContent = 'Mode outfit: unggah foto, atur area baju, lalu isi prompt outfit.';
+  else if (!presetData) presetHint.textContent = isImage
     ? 'Mode gambar: frames dikunci ke 1.'
     : 'Mode video: pilih durasi + kualitas atau atur frames manual.';
+  renderPipelineShell();
 }
 
 function renderProgress(progress) {
@@ -1389,6 +1490,7 @@ es.addEventListener('file', (event) => pushLog(`file baru: ${event.data ? JSON.p
 
 modeImage.addEventListener('click', () => setMode('image'));
 modeVideo.addEventListener('click', () => setMode('video'));
+modeOutfit.addEventListener('click', () => setMode('outfit'));
 configPreset.addEventListener('click', () => setConfigMode('preset'));
 configManual.addEventListener('click', () => setConfigMode('manual'));
 presetDuration.addEventListener('change', applyPreset);
@@ -1406,8 +1508,57 @@ loadPresets();
 loadFiles(1);
 setInterval(updateEta, 1000);
 
+async function applyStartResponse(response) {
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || 'gagal memulai inference');
+  logReady = false;
+  pushLog(`job ${data.job.id} dimulai · ${data.job.output}`);
+  renderJob(data.job);
+}
+
+async function submitOutfit() {
+  const file = $('outfitImage').files[0];
+  if (!file) {
+    alert('Foto karakter wajib diunggah.');
+    return;
+  }
+  const width = Number($('outfitWidth').value);
+  const height = Number($('outfitHeight').value);
+  const validSize = Number.isInteger(width) && Number.isInteger(height)
+    && width >= 256 && width <= 1024 && height >= 256 && height <= 1024
+    && width % 16 === 0 && height % 16 === 0;
+  if (!validSize) {
+    alert('Ukuran harus antara 256–1024 px dan kelipatan 16.');
+    return;
+  }
+  const form = new FormData();
+  form.append('image', file);
+  form.append('prompt', $('outfitPrompt').value.trim());
+  form.append('negative', $('outfitNegative').value.trim());
+  form.append('steps', $('outfitSteps').value);
+  form.append('width', String(width));
+  form.append('height', String(height));
+  form.append('cfg', $('outfitCfg').value);
+  form.append('strength', $('outfitStrength').value);
+  form.append('left', $('maskLeft').value);
+  form.append('top', $('maskTop').value);
+  form.append('right', $('maskRight').value);
+  form.append('bottom', $('maskBottom').value);
+  genBtn.disabled = true;
+  genBtn.textContent = 'Starting…';
+  try {
+    const response = await fetch('/api/outfit', { method: 'POST', body: form });
+    await applyStartResponse(response);
+  } catch (err) {
+    pushLog(`ERROR: ${err.message}`);
+    alert(err.message);
+    renderJob(currentJob);
+  }
+}
+
 $('genForm').addEventListener('submit', async (event) => {
   event.preventDefault();
+  if (generateMode === 'outfit') return submitOutfit();
   if (Number($('frames').value) >= 401 && !confirm(`Video ${$('frames').value} frame bisa memakan waktu sangat lama di CPU 2 core. Lanjutkan?`)) return;
   if (configMode === 'preset') applyPreset();
   const width = Number($('width').value);
@@ -1438,11 +1589,7 @@ $('genForm').addEventListener('submit', async (event) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'gagal memulai inference');
-    logReady = false;
-    pushLog(`job ${data.job.id} dimulai · ${data.job.output}`);
-    renderJob(data.job);
+    await applyStartResponse(response);
   } catch (err) {
     pushLog(`ERROR: ${err.message}`);
     alert(err.message);

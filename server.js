@@ -20,8 +20,15 @@ const VULKAN_DEVICE = String(process.env.VULKAN_DEVICE || '/dev/dri').trim() || 
 const EXTRA_ARGS = parseCliArgs(process.env.SD_EXTRA_ARGS || '');
 const FFMPEG_BIN = process.env.FFMPEG_BIN || 'ffmpeg';
 const KEEP_AVI = process.env.KEEP_AVI === '1';
+const INPUT_DIR = path.resolve(process.env.INPUT_DIR || path.join(__dirname, 'input'));
+const INPUT_HOST_DIR = String(process.env.INPUT_HOST_DIR || '').trim() || INPUT_DIR;
+const INPAINT_MODEL_DIR = path.resolve(process.env.INPAINT_MODEL_DIR || '/root/models/inpaint');
+const INPAINT_MODEL_HOST_DIR = String(process.env.INPAINT_MODEL_HOST_DIR || '').trim() || INPAINT_MODEL_DIR;
+const INPAINT_MODEL_NAME = String(process.env.INPAINT_MODEL_NAME || 'stable-diffusion-v1-5-inpainting-Q4_0.gguf').replace(/[^a-zA-Z0-9._-]/g, '');
+const MAX_UPLOAD_BYTES = 16 * 1024 * 1024;
 const STATE_FILE = path.resolve(process.env.STATE_FILE || path.join(__dirname, 'state.json'));
 fs.mkdirSync(OUT_DIR, { recursive: true });
+fs.mkdirSync(INPUT_DIR, { recursive: true });
 fs.mkdirSync(path.dirname(STATE_FILE), { recursive: true });
 const HTML = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
 const BOOT = Date.now();
@@ -51,6 +58,86 @@ function normalizedBackend() {
 
 function backendCliArgs() {
   return ['--backend', normalizedBackend()];
+}
+
+function parseMultipart(buffer, boundary) {
+  const result = { fields: Object.create(null), files: Object.create(null) };
+  const delimiter = Buffer.from(`--${boundary}`);
+  let pos = buffer.indexOf(delimiter);
+  if (pos < 0) throw new Error('format upload tidak dikenali');
+  while (pos >= 0) {
+    pos += delimiter.length;
+    if (buffer.slice(pos, pos + 2).toString() === '--') break;
+    if (buffer.slice(pos, pos + 2).toString() === '\r\n') pos += 2;
+    const headerEnd = buffer.indexOf('\r\n\r\n', pos);
+    if (headerEnd < 0) throw new Error('header upload tidak lengkap');
+    const headers = buffer.slice(pos, headerEnd).toString('utf8');
+    const disposition = headers.match(/^content-disposition:\s*form-data;([^\r\n]*)/im);
+    const name = disposition && disposition[1].match(/\bname="([^"]*)"/i);
+    const next = buffer.indexOf(delimiter, headerEnd + 4);
+    if (next < 0) throw new Error('body upload tidak lengkap');
+    if (disposition && name && name[1]) {
+      const filename = disposition[1].match(/\bfilename="([^"]*)"/i);
+      let contentEnd = next;
+      if (buffer[contentEnd - 2] === 13 && buffer[contentEnd - 1] === 10) contentEnd -= 2;
+      const data = buffer.subarray(headerEnd + 4, contentEnd);
+      if (filename && filename[1]) {
+        const type = headers.match(/^content-type:\s*([^\r\n]+)/im);
+        result.files[name[1]] = {
+          filename: filename[1],
+          contentType: type ? type[1].trim() : 'application/octet-stream',
+          data
+        };
+      } else {
+        result.fields[name[1]] = data.toString('utf8');
+      }
+    }
+    pos = next;
+  }
+  return result;
+}
+
+function readUpload(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let size = 0;
+    req.on('data', (chunk) => {
+      size += chunk.length;
+      if (size > MAX_UPLOAD_BYTES) {
+        reject(new Error('upload terlalu besar, maksimal 16MB'));
+        req.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', reject);
+  });
+}
+
+function clampNumber(value, min, max, fallback) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(max, Math.max(min, parsed));
+}
+
+function maskBox(width, height, fields) {
+  const left = clampNumber(fields.left, 0, 90, 25);
+  const top = clampNumber(fields.top, 0, 90, 30);
+  const right = clampNumber(fields.right, left + 5, 100, 75);
+  const bottom = clampNumber(fields.bottom, top + 5, 100, 95);
+  const x = Math.round((width * left) / 100);
+  const y = Math.round((height * top) / 100);
+  return {
+    left,
+    top,
+    right,
+    bottom,
+    x,
+    y,
+    w: Math.min(width - x, Math.max(16, Math.round((width * (right - left)) / 100))),
+    h: Math.min(height - y, Math.max(16, Math.round((height * (bottom - top)) / 100)))
+  };
 }
 
 function dockerDeviceArgs() {
@@ -264,6 +351,10 @@ function publicJob() {
     output: job.output,
     prompt: job.prompt,
     frames: job.frames,
+    kind: job.kind || 'wan',
+    source: job.source || null,
+    mask: job.mask || null,
+    strength: job.strength || null,
     error: job.error,
     warning: job.warning,
     cancelled: Boolean(job.cancelled)
@@ -425,6 +516,179 @@ function transcodeToMp4(aviName, mp4Name) {
       resolve(true);
     });
   });
+}
+
+function runFfmpeg(args) {
+  return new Promise((resolve) => {
+    const ff = spawn(FFMPEG_BIN, ['-y', '-loglevel', 'error', ...args], { stdio: ['ignore', 'pipe', 'pipe'] });
+    let stderr = '';
+    ff.stderr.on('data', (d) => {
+      stderr += d.toString();
+      if (stderr.length > 4000) stderr = stderr.slice(-4000);
+    });
+    ff.on('error', () => resolve({ ok: false, error: 'ffmpeg tidak tersedia' }));
+    ff.on('close', (code) => resolve({ ok: code === 0, error: stderr.trim() }));
+  });
+}
+
+async function prepareOutfitFiles(config, id) {
+  const extension = config.image.filename.toLowerCase().match(/\.(jpe?g|png|webp)$/)?.[1] || 'png';
+  const uploaded = path.join(INPUT_DIR, `${id}-upload.${extension}`);
+  const sourceName = `${id}-source.png`;
+  const maskName = `${id}-mask.png`;
+  fs.writeFileSync(uploaded, config.image.data);
+  const box = maskBox(config.width, config.height, config.mask);
+  try {
+    const sourceFilter = `scale=${config.width}:${config.height}:force_original_aspect_ratio=decrease,pad=${config.width}:${config.height}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1`;
+    const source = await runFfmpeg(['-i', uploaded, '-vf', sourceFilter, '-frames:v', '1', path.join(INPUT_DIR, sourceName)]);
+    if (!source.ok || !fs.existsSync(path.join(INPUT_DIR, sourceName))) throw new Error(source.error || 'gagal menyiapkan foto sumber');
+    const maskFilter = `drawbox=x=${box.x}:y=${box.y}:w=${box.w}:h=${box.h}:color=white:t=fill,setsar=1`;
+    const mask = await runFfmpeg([
+      '-f', 'lavfi', '-i', `color=c=black:s=${config.width}x${config.height}`,
+      '-vf', maskFilter, '-frames:v', '1', '-pix_fmt', 'gray', path.join(INPUT_DIR, maskName)
+    ]);
+    if (!mask.ok || !fs.existsSync(path.join(INPUT_DIR, maskName))) throw new Error(mask.error || 'gagal membuat mask');
+    return { sourceName, maskName, box };
+  } finally {
+    try {
+      fs.unlinkSync(uploaded);
+    } catch {}
+  }
+}
+
+function startInpaintJob(config, prepared) {
+  const n = ++seq;
+  const id = `f${Date.now()}-${n}`;
+  const outputName = `outfit-${Date.now()}-${n}.png`;
+  const inputBase = RUNNER === 'local' ? INPUT_DIR : '/input';
+  const modelBase = RUNNER === 'local' ? INPAINT_MODEL_DIR : '/inpaint';
+  const outputBase = RUNNER === 'local' ? OUT_DIR : '/output';
+  const outputPath = path.join(outputBase, outputName);
+  const container = `sd-ui-outfit-${id}`.replace(/[^A-Za-z0-9_.-]/g, '-');
+
+  job = {
+    id,
+    kind: 'outfit',
+    status: 'starting',
+    stage: 'input',
+    startedAt: now(),
+    finishedAt: null,
+    exitCode: null,
+    progress: { current: 0, total: config.steps, percent: 0 },
+    logs: [],
+    output: outputName,
+    prompt: config.prompt,
+    frames: 1,
+    source: prepared.sourceName,
+    mask: prepared.maskName,
+    strength: config.strength,
+    error: null,
+    warning: null,
+    cancelled: false,
+    proc: null,
+    container
+  };
+  saveState();
+
+  const sdArgs = [
+    ...backendCliArgs(),
+    '-M', 'img_gen',
+    '--model', path.join(modelBase, INPAINT_MODEL_NAME),
+    '-i', path.join(inputBase, prepared.sourceName),
+    '--mask', path.join(inputBase, prepared.maskName),
+    '-p', config.prompt,
+    '-n', config.negative,
+    '--cfg-scale', config.cfg.toFixed(1),
+    '--sampling-method', 'euler',
+    '--steps', String(config.steps),
+    '-W', String(config.width),
+    '-H', String(config.height),
+    '--strength', config.strength.toFixed(2),
+    '--vae-tiling',
+    '-o', outputPath,
+    '-v',
+    ...EXTRA_ARGS
+  ];
+
+  const proc = RUNNER === 'local'
+    ? spawn(SD_CLI_BIN, sdArgs, { stdio: ['ignore', 'pipe', 'pipe'], detached: process.platform !== 'win32' })
+    : spawn('docker', [
+        'run', '--rm', '--name', container,
+        ...dockerDeviceArgs(),
+        '-v', `${INPAINT_MODEL_HOST_DIR}:/inpaint:ro`,
+        '-v', `${INPUT_HOST_DIR}:/input:ro`,
+        '-v', `${OUT_HOST_DIR}:/output`,
+        IMAGE,
+        ...sdArgs
+      ], { stdio: ['ignore', 'pipe', 'pipe'] });
+  job.proc = proc;
+  job.status = 'running';
+  job.stage = 'text';
+  broadcast('status', { job: publicJob() });
+  saveState();
+
+  proc.stdout.on('data', (d) => handleOutput(job, d));
+  proc.stderr.on('data', (d) => handleOutput(job, d));
+
+  proc.on('error', (err) => {
+    if (job && job.cancelled) return;
+    job.error = String(err.message || err);
+    job.status = 'error';
+    job.finishedAt = now();
+    broadcast('status', { job: publicJob() });
+    emitLog(job, job.error);
+    saveState();
+  });
+
+  proc.on('close', (code) => {
+    if (!job || job.id !== id) return;
+    job.exitCode = code;
+    job.finishedAt = now();
+    if (job.cancelled) {
+      job.status = 'stopped';
+      job.error = null;
+      job.warning = 'dihentikan oleh user · tidak ada output akhir';
+      const line = `job ${id} dihentikan · ${RUNNER_LABEL} exit ${code}`;
+      job.logs.push(line);
+      if (job.logs.length > 400) job.logs.shift();
+      emitLog(job, line);
+    } else {
+      if (code !== 0 && !job.error) {
+        job.error = code === 137 ? oomError() : `${RUNNER_LABEL} exit ${code}`;
+        if (code === 137) emitLog(job, job.error);
+      }
+      job.status = code === 0 ? 'done' : 'error';
+      if (code === 0) advanceStage(job, 'output');
+    }
+    if (code === 0) {
+      const meta = {
+        kind: 'outfit',
+        prompt: config.prompt,
+        negative: config.negative,
+        frames: 1,
+        steps: config.steps,
+        width: config.width,
+        height: config.height,
+        cfg: config.cfg,
+        strength: config.strength,
+        source: prepared.sourceName,
+        mask: prepared.maskName,
+        maskBox: prepared.box,
+        startedAt: job.startedAt,
+        finishedAt: job.finishedAt,
+        durationMs: jobDurationMs(job),
+        status: job.status,
+        warning: job.warning || null
+      };
+      if (fs.existsSync(path.join(OUT_DIR, outputName))) writeMeta(outputName, { ...meta, output: outputName });
+    }
+    knownFiles = new Set(listFiles().map((f) => f.name));
+    broadcast('status', { job: publicJob() });
+    broadcast('files', { counts: fileCounts() });
+    saveState();
+  });
+
+  return publicJob();
 }
 
 function startJob(config) {
@@ -678,6 +942,74 @@ async function handleGenerate(req, res) {
   return send(res, 200, { job: created });
 }
 
+async function handleOutfit(req, res) {
+  if (rateLimited(req)) return send(res, 429, { error: 'terlalu banyak request, coba lagi sebentar' });
+  if (job && ACTIVE_JOB_STATUSES.includes(job.status)) {
+    return send(res, 409, { error: 'inference masih berjalan', job: publicJob() });
+  }
+
+  const contentType = String(req.headers['content-type'] || '');
+  const boundary = contentType.match(/boundary=(?:"([^"]+)"|([^;]+))/i);
+  if (!contentType.toLowerCase().startsWith('multipart/form-data') || !boundary) {
+    return send(res, 400, { error: 'kirim outfit swap sebagai multipart/form-data' });
+  }
+
+  let form;
+  try {
+    form = parseMultipart(await readUpload(req), String(boundary[1] || boundary[2] || '').trim());
+  } catch (err) {
+    return send(res, 400, { error: `upload gagal: ${err.message}` });
+  }
+
+  const modelPath = path.join(RUNNER === 'local' ? INPAINT_MODEL_DIR : INPAINT_MODEL_HOST_DIR, INPAINT_MODEL_NAME);
+  if (!fs.existsSync(modelPath)) {
+    return send(res, 409, { error: `model inpainting belum tersedia: ${modelPath}. Jalankan scripts/download-inpaint-model.sh` });
+  }
+
+  const image = form.files.image;
+  if (!image || !image.data.length) return send(res, 400, { error: 'foto karakter wajib diunggah' });
+  const allowedImage = /^image\/(png|jpeg|webp)$/i.test(image.contentType) || /\.(png|jpe?g|webp)$/i.test(image.filename);
+  if (!allowedImage) return send(res, 400, { error: 'format foto harus PNG, JPG, atau WEBP' });
+
+  const fields = form.fields;
+  const prompt = String(fields.prompt || 'a portrait, detailed outfit, consistent identity, natural lighting').trim().slice(0, 500)
+    || 'a portrait, detailed outfit, consistent identity, natural lighting';
+  const negative = String(fields.negative || 'blurry, low quality, watermark, text, deformed body').trim().slice(0, 500);
+  const steps = clampInt(fields.steps, 1, 50, 20);
+  const width = clampInt(fields.width, 256, 1024, 512);
+  const height = clampInt(fields.height, 256, 1024, 640);
+  const cfg = clampNum(fields.cfg, 0, 20, 6);
+  const strength = clampNum(fields.strength, 0.3, 1, 0.95);
+  if (width % 16 || height % 16) return send(res, 400, { error: 'width dan height harus kelipatan 16' });
+
+  const config = {
+    image,
+    prompt,
+    negative,
+    steps,
+    width,
+    height,
+    cfg,
+    strength,
+    mask: {
+      left: fields.left,
+      top: fields.top,
+      right: fields.right,
+      bottom: fields.bottom
+    }
+  };
+
+  let prepared;
+  try {
+    prepared = await prepareOutfitFiles(config, `f${Date.now()}-${Math.random().toString(16).slice(2, 8)}`);
+  } catch (err) {
+    return send(res, 400, { error: `gagal menyiapkan outfit: ${err.message}` });
+  }
+
+  const created = startInpaintJob(config, prepared);
+  return send(res, 200, { job: created });
+}
+
 function handleStream(req, res) {
   res.writeHead(200, {
     ...SEC_HEADERS,
@@ -794,7 +1126,7 @@ const server = http.createServer(async (req, res) => {
       dockerDevices: dockerDeviceArgs(),
       backendArgs: backendCliArgs(),
       extraArgs: EXTRA_ARGS,
-      hostMounts: { models: MODEL_HOST_DIR, output: OUT_HOST_DIR }
+      hostMounts: { models: MODEL_HOST_DIR, output: OUT_HOST_DIR, input: INPUT_HOST_DIR, inpaint: INPAINT_MODEL_HOST_DIR }
     });
   }
   if (!checkAuth(req, res)) return;
@@ -812,6 +1144,10 @@ const server = http.createServer(async (req, res) => {
   if (p === '/api/generate') {
     if (req.method !== 'POST') return send(res, 405, { error: 'method not allowed' });
     return handleGenerate(req, res);
+  }
+  if (p === '/api/outfit') {
+    if (req.method !== 'POST') return send(res, 405, { error: 'method not allowed' });
+    return handleOutfit(req, res);
   }
   if (p === '/api/cancel') {
     if (req.method !== 'POST') return send(res, 405, { error: 'method not allowed' });
