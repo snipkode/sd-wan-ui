@@ -550,6 +550,10 @@ let logReady = false;
 const PAGE_SIZE = 12;
 const ACTIVE_STATUSES = ['starting', 'running', 'decoding', 'encoding', 'stopping'];
 
+function generatorLabel() {
+  return generateMode === 'image' ? 'Generate Gambar' : 'Generate Video';
+}
+
 if (window.innerWidth < 700) $('advanced').open = false;
 
 function setConn(text, ok) {
@@ -636,6 +640,8 @@ function setMode(mode) {
   modeVideo.classList.toggle('active', !isImage);
   modeImage.setAttribute('aria-pressed', String(isImage));
   modeVideo.setAttribute('aria-pressed', String(!isImage));
+  const busy = currentJob && ACTIVE_STATUSES.includes(currentJob.status);
+  genBtn.textContent = busy ? 'Generating…' : generatorLabel();
   presetDuration.parentElement.hidden = isImage;
   presetRow.classList.toggle('single', isImage);
   presetDuration.disabled = isImage;
@@ -659,7 +665,7 @@ function renderProgress(progress) {
 
 function renderJob(job) {
   currentJob = job;
-  const genLabel = generateMode === 'image' ? 'Generate Gambar' : 'Generate Video';
+  const genLabel = generatorLabel();
   if (!job) {
     jobStatus.textContent = 'idle';
     jobStatus.className = 'badge';
