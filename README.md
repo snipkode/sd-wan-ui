@@ -161,6 +161,7 @@ flowchart LR
 | `docker-compose.offline.yml` | Compose image offline dengan model sudah termasuk di image |
 | `.env.compose.example` | Contoh env untuk alur Docker Compose |
 | `scripts/download-models.sh` | Download model ke `MODEL_DIR` |
+| `README.model-alternatives.md` | Panduan quant, VAE, dan varian model alternatif yang kompatibel |
 | `scripts/build-image.sh` | Build image inference `sd-cpu:local` |
 | `scripts/build-ui-image.sh` | Build image UI `sd-wan-ui:local` |
 | `scripts/build-all-image.sh` | Build image all-in-one `sd-wan:local` |
@@ -198,9 +199,11 @@ Sumber model:
 - `https://huggingface.co/city96/umt5-xxl-encoder-gguf/resolve/main/umt5-xxl-encoder-Q3_K_S.gguf`
 - `https://github.com/madebyollin/taehv/raw/refs/heads/main/safetensors/taew2_1.safetensors`
 
+Untuk quant alternatif, VAE penuh, dan varian Wan lain yang didukung `stable-diffusion.cpp`, lihat [README.model-alternatives.md](README.model-alternatives.md).
+
 ## Fungsi `stable-diffusion.cpp` yang dipakai
 
-Semua argumen dirakit di `startJob()` (`server.js:223`). Berikut arti dan alasannya:
+Semua argumen dirakit di `startJob()` (`server.js:461`). Berikut arti dan alasannya:
 
 | Argumen | Fungsi | Kenapa |
 | --- | --- | --- |
