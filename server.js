@@ -382,7 +382,12 @@ function startJob(config) {
     if (!job || job.id !== id) return;
     job.exitCode = code;
     job.finishedAt = now();
-    if (code !== 0 && !job.error) job.error = `docker exit ${code}`;
+    if (code !== 0 && !job.error) {
+      job.error = code === 137
+        ? 'docker exit 137: OOM/killed, turunkan frame/resolusi/step atau tambah RAM/swap'
+        : `docker exit ${code}`;
+      if (code === 137) broadcast('log', { jobId: job.id, line: job.error, progress: job.progress });
+    }
 
     if (code === 0 && config.frames > 1) {
       job.status = 'encoding';

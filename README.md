@@ -79,6 +79,25 @@ Versi `sd-cli` bisa tetap `master-1106-532d2c1`; yang berbeda adalah build/image
 
 Contoh job 29 frame/512x320/20 step: CPU sekitar **38 menit**, GPU kelas 8–12 GB sekitar **1–3 menit**. Angka GPU belum diukur di VPS ini karena GPU belum tersedia, jadi hanya estimasi. Jika VRAM kurang dari 8 GB dan `auto-fit` mulai offload ke RAM, kecepatan bisa turun drastis mendekati CPU.
 
+### Docker exit 137 / OOM
+
+Exit code `137` berarti proses di-`SIGKILL`. Pada job 29 frame/512x320/20 step, kernel mencatat `oom-kill: task=sd-cli` dan `Out of memory: Killed process ... anon-rss:6133828kB`. Sampling sempat selesai `20/20` dalam 2296 detik, lalu proses mati saat `decode_video_outputs`/TAEHV decode. Jadi ini kehabisan RAM + swap, bukan file video rusak.
+
+Penanganan:
+
+1. Turunkan beban ke `320x256`, `frames <= 9`, dan `steps = 4–10` — konfigurasi ini sudah terbukti sukses.
+2. Jangan jalankan dua job bersamaan; hentikan container/service lain yang tidak dipakai.
+3. Tambah RAM atau swap. Swap 2 GB saat ini sudah terpakai ±1 GB, jadi kosongkan disk dulu sebelum menambah swap.
+4. Untuk preset 25–60 detik, pakai VPS minimal 16 GB RAM atau GPU.
+
+Cek cepat:
+
+```bash
+dmesg -T | grep -i 'killed process'
+docker inspect <container> --format '{{.State.OOMKilled}}'
+free -h
+```
+
 Untuk mengecek ulang:
 
 ```bash
