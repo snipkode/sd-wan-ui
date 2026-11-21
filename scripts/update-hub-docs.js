@@ -45,11 +45,13 @@ async function getHubToken() {
 
 const docs = {
   'sd-wan-offline': {
-    description: 'Full portable Wan 2.1 UI + offline models included. No model download needed.',
+    description: 'Full portable Wan 2.1 UI + offline models + pipeline guide. No model download needed.',
     full_description: [
       '# sd-wan-offline',
       '',
       'Full portable Docker image for **Wan 2.1 T2V 1.3B Q4_K_M** with the web UI, `sd-cli` CPU backend, ffmpeg, and the three Wan models bundled inside. No model download and no Docker socket are needed.',
+      '',
+      'The UI includes a **pipeline indicator** showing text encoder → diffusion → VAE → video encode → output, plus a beginner guide explaining that higher `steps` means more correction passes and usually better detail at the cost of time. ETA countdown and output metadata are also available.',
       '',
       'Size is about **4.15 GB compressed**, so the first pull can take a while.',
       '',
@@ -81,11 +83,13 @@ const docs = {
     ].join('\n')
   },
   'sd-wan': {
-    description: 'All-in-one Wan 2.1 T2V UI + sd-cli CPU + ffmpeg. No Docker socket needed.',
+    description: 'All-in-one Wan 2.1 T2V UI + sd-cli + ffmpeg + pipeline guide.',
     full_description: [
       '# sd-wan',
       '',
       'All-in-one Docker image for **Wan 2.1 T2V 1.3B Q4_K_M** with a web UI, `sd-cli` CPU backend, and ffmpeg. Inference runs directly inside the container, so this image does **not** need `/var/run/docker.sock`.',
+      '',
+      'The UI now has a **pipeline indicator** before the log, tooltips for beginners, an ETA countdown, a Preset/Manual layout, and a short guide explaining that `steps` is the number of correction passes: higher values usually improve detail but take longer.',
       '',
       '## Docker Compose',
       '',
@@ -133,11 +137,13 @@ const docs = {
     ].join('\n')
   },
   'sd-wan-ui': {
-    description: 'Web UI for sd-wan-ui split setup. Use with sd-wan-infer.',
+    description: 'Web UI for sd-wan-ui split setup with pipeline guide and ETA.',
     full_description: [
       '# sd-wan-ui',
       '',
       'Web UI container for the split **sd-wan-ui** setup. It needs `snipkode/sd-wan-infer` as the inference image and mounts `/var/run/docker.sock` to launch inference containers.',
+      '',
+      'Included in this UI: pipeline stage indicator with model names, beginner tooltips, ETA countdown, Preset/Manual configuration, and output metadata in the gallery.',
       '',
       'For a simpler single-container setup, use `snipkode/sd-wan` instead.',
       '',
