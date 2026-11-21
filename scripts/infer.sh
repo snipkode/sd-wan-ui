@@ -13,8 +13,22 @@ NAME="${NAME:-wan-$(date +%s)}"
 MODEL_DIR="${MODEL_DIR:-/root/models/wan}"
 OUT_DIR="${OUT_DIR:-/root/out}"
 SD_IMAGE="${SD_IMAGE:-sd-cpu:local}"
+BACKEND="${SD_BACKEND:-cpu}"
+GPU_DEVICES="${GPU_DEVICES:-all}"
+VULKAN_DEVICE="${VULKAN_DEVICE:-/dev/dri}"
 FFMPEG_BIN="${FFMPEG_BIN:-ffmpeg}"
 KEEP_AVI="${KEEP_AVI:-0}"
+SD_EXTRA_ARGS="${SD_EXTRA_ARGS:-}"
+
+BACKEND="${BACKEND,,}"
+if [[ -z "$BACKEND" ]]; then BACKEND="cpu"; fi
+if [[ "$BACKEND" == "cuda" ]]; then BACKEND="cuda0"; fi
+if [[ "$BACKEND" == "vulkan" ]]; then BACKEND="vulkan0"; fi
+
+gpu_args=()
+if [[ "$BACKEND" == *cuda* ]]; then gpu_args+=(--gpus "$GPU_DEVICES"); fi
+if [[ "$BACKEND" == *vulkan* ]]; then gpu_args+=(--device "$VULKAN_DEVICE"); fi
+read -r -a extra_args <<< "$SD_EXTRA_ARGS"
 
 if [[ "$FRAMES" -gt 1 ]]; then
     EXT="avi"
@@ -24,10 +38,11 @@ fi
 
 mkdir -p "$OUT_DIR"
 
-docker run --rm \
+docker run --rm "${gpu_args[@]}" \
     -v "$MODEL_DIR:/models:ro" \
     -v "$OUT_DIR:/output" \
     "$SD_IMAGE" \
+    --backend "$BACKEND" \
     -M vid_gen \
     --diffusion-model /models/wan2.1_t2v_1.3b-q4_k_m.gguf \
     --t5xxl /models/umt5-xxl-encoder-Q3_K_S.gguf \
@@ -42,7 +57,8 @@ docker run --rm \
     -H "$HEIGHT" \
     --video-frames "$FRAMES" \
     -o "/output/${NAME}.${EXT}" \
-    -v
+    -v \
+    "${extra_args[@]}"
 
 if [[ "$FRAMES" -gt 1 ]] && command -v "$FFMPEG_BIN" >/dev/null 2>&1; then
     if "$FFMPEG_BIN" -y -loglevel error -i "$OUT_DIR/${NAME}.avi" \

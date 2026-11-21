@@ -9,6 +9,10 @@ const UI_TOKEN = process.env.UI_TOKEN || '';
 const OUT_DIR = path.resolve(process.env.OUT_DIR || '/root/out');
 const MODEL_DIR = path.resolve(process.env.MODEL_DIR || '/root/models/wan');
 const IMAGE = process.env.SD_IMAGE || 'sd-cpu:local';
+const BACKEND = String(process.env.SD_BACKEND || 'cpu').trim();
+const GPU_DEVICES = String(process.env.GPU_DEVICES || 'all').trim() || 'all';
+const VULKAN_DEVICE = String(process.env.VULKAN_DEVICE || '/dev/dri').trim() || '/dev/dri';
+const EXTRA_ARGS = parseCliArgs(process.env.SD_EXTRA_ARGS || '');
 const FFMPEG_BIN = process.env.FFMPEG_BIN || 'ffmpeg';
 const KEEP_AVI = process.env.KEEP_AVI === '1';
 const STATE_FILE = path.join(__dirname, 'state.json');
@@ -20,6 +24,30 @@ const VIDEO_FPS = 16;
 function framesForDuration(seconds) {
   const target = Math.round(seconds * VIDEO_FPS);
   return Math.max(1, 1 + Math.round((target - 1) / 4) * 4);
+}
+
+function parseCliArgs(value) {
+  const parts = String(value).match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) || [];
+  return parts.map((part) => part.replace(/^(["'])(.*)\1$/, '$2'));
+}
+
+function normalizedBackend() {
+  const value = BACKEND.toLowerCase() || 'cpu';
+  if (value === 'cuda') return 'cuda0';
+  if (value === 'vulkan') return 'vulkan0';
+  return value;
+}
+
+function backendCliArgs() {
+  return ['--backend', normalizedBackend()];
+}
+
+function dockerDeviceArgs() {
+  const value = normalizedBackend();
+  const args = [];
+  if (value.includes('cuda')) args.push('--gpus', GPU_DEVICES);
+  if (value.includes('vulkan')) args.push('--device', VULKAN_DEVICE);
+  return args;
 }
 
 const QUALITY_PRESETS = {
@@ -309,9 +337,11 @@ function startJob(config) {
 
   const args = [
     'run', '--rm', '--name', container,
+    ...dockerDeviceArgs(),
     '-v', `${MODEL_DIR}:/models:ro`,
     '-v', `${OUT_DIR}:/output`,
     IMAGE,
+    ...backendCliArgs(),
     '-M', 'vid_gen',
     '--diffusion-model', '/models/wan2.1_t2v_1.3b-q4_k_m.gguf',
     '--taesd', '/models/taew2_1.safetensors',
@@ -326,7 +356,8 @@ function startJob(config) {
     '-H', String(config.height),
     '--video-frames', String(config.frames),
     '-o', outputPath,
-    '-v'
+    '-v',
+    ...EXTRA_ARGS
   ];
 
   const proc = spawn('docker', args, { stdio: ['ignore', 'pipe', 'pipe'] });
@@ -507,11 +538,17 @@ const server = http.createServer(async (req, res) => {
 
   const p = url.pathname;
   if (p === '/api/health') {
+    const current = publicJob();
     return send(res, 200, {
       ok: true,
       uptime: Math.round((Date.now() - BOOT) / 1000),
       auth: Boolean(UI_TOKEN),
-      job: publicJob() ? publicJob().status : null
+      job: current ? current.status : null,
+      backend: normalizedBackend(),
+      image: IMAGE,
+      dockerDevices: dockerDeviceArgs(),
+      backendArgs: backendCliArgs(),
+      extraArgs: EXTRA_ARGS
     });
   }
   if (!checkAuth(req, res)) return;

@@ -283,10 +283,29 @@ Salin `.env.example` menjadi `.env`, lalu sesuaikan:
 | `OUT_DIR` | `/root/out` | Direktori hasil generate |
 | `MODEL_DIR` | `/root/models/wan` | Direktori model GGUF/TAEHV |
 | `SD_IMAGE` | `sd-cpu:local` | Nama image Docker inference |
+| `SD_BACKEND` | `cpu` | Backend `sd-cli`: `cpu`, `cuda`/`cuda0`, `vulkan`/`vulkan0`, atau module map seperti `clip=cpu,diffusion=cuda0` |
+| `GPU_DEVICES` | `all` | Nilai `--gpus` Docker saat backend CUDA |
+| `VULKAN_DEVICE` | `/dev/dri` | Device Docker saat backend Vulkan/AMD/Intel |
+| `SD_EXTRA_ARGS` | kosong | Argumen CLI tambahan, misalnya `--max-vram 8` |
 | `FFMPEG_BIN` | `ffmpeg` | Path binary ffmpeg untuk konversi AVI → MP4 |
 | `KEEP_AVI` | `0` | Set `1` untuk menyimpan AVI asli setelah konversi |
 
 Jika `UI_TOKEN` kosong, UI terbuka tanpa auth. Untuk deployment publik, disarankan mengisinya dan menaruh reverse proxy dengan TLS di depan.
+
+### Backend inference
+
+Default `SD_BACKEND=cpu`, sehingga tidak ada flag GPU Docker yang ditambahkan. Nilai yang didukung:
+
+| `SD_BACKEND` | Docker flag | `sd-cli` flag |
+| --- | --- | --- |
+| `cpu` | — | `--backend cpu` |
+| `cuda` / `cuda0` | `--gpus all` | `--backend cuda0` |
+| `vulkan` / `vulkan0` | `--device /dev/dri` | `--backend vulkan0` |
+| `clip=cpu,diffusion=cuda0` | `--gpus all` | diteruskan apa adanya |
+
+`GPU_DEVICES` mengubah nilai `--gpus` untuk NVIDIA, sedangkan `VULKAN_DEVICE` mengubah path device untuk AMD/Intel Vulkan. `SD_EXTRA_ARGS` diteruskan sebagai argumen CLI tanpa shell, sehingga aman untuk nilai seperti `--max-vram 8`.
+
+Untuk memakai GPU nanti: siapkan image CUDA/Vulkan, set `SD_IMAGE=sd-gpu:local`, lalu set `SD_BACKEND=cuda0` atau `vulkan0`. Server tidak mendeteksi GPU secara otomatis; backend harus dipilih lewat env. Detail backend aktif bisa dilihat di `GET /api/health`.
 
 ## Deployment
 
