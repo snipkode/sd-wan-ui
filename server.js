@@ -163,12 +163,36 @@ function contentType(name) {
   return 'application/octet-stream';
 }
 
+function metaFile(name) {
+  return path.join(OUT_DIR, `${name}.json`);
+}
+
+function readMeta(name) {
+  if (!safeName(name)) return null;
+  try {
+    const value = JSON.parse(fs.readFileSync(metaFile(name), 'utf8'));
+    return value && typeof value === 'object' ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeMeta(name, meta) {
+  if (!safeName(name)) return;
+  try {
+    fs.writeFileSync(metaFile(name), JSON.stringify(meta, null, 2));
+  } catch (err) {
+    console.error(`metadata ${name}: ${err.message}`);
+  }
+}
+
 function listFiles() {
   return fs.readdirSync(OUT_DIR)
     .filter(safeName)
     .map((name) => {
       const st = fs.statSync(path.join(OUT_DIR, name));
-      return { name, size: st.size, mtime: st.mtime.toISOString(), type: /\.(mp4|webm|mov|avi)$/i.test(name) ? 'video' : 'image' };
+      const meta = readMeta(name);
+      return { name, size: st.size, mtime: st.mtime.toISOString(), type: /\.(mp4|webm|mov|avi)$/i.test(name) ? 'video' : 'image', ...(meta ? { meta } : {}) };
     })
     .filter((f) => /\.(png|jpe?g|webp|mp4|webm|mov|avi)$/i.test(f.name))
     .sort((a, b) => b.mtime.localeCompare(a.mtime));
@@ -484,6 +508,29 @@ function startJob(config) {
 
       job.status = code === 0 ? 'done' : 'error';
     }
+    if (code === 0) {
+      const started = Date.parse(job.startedAt);
+      const finished = Date.parse(job.finishedAt);
+      const meta = {
+        prompt: config.prompt,
+        negative: config.negative,
+        frames: config.frames,
+        videoSeconds: config.frames > 1 ? Number(((config.frames - 1) / 16).toFixed(2)) : null,
+        steps: config.steps,
+        width: config.width,
+        height: config.height,
+        cfg: config.cfg,
+        startedAt: job.startedAt,
+        finishedAt: job.finishedAt,
+        durationMs: Number.isFinite(started) && Number.isFinite(finished) ? Math.max(0, finished - started) : null,
+        status: job.status,
+        warning: job.warning || null
+      };
+      const outputs = new Set([job.output, outputName].filter(Boolean));
+      for (const name of outputs) {
+        if (fs.existsSync(path.join(OUT_DIR, name))) writeMeta(name, { ...meta, output: name });
+      }
+    }
     knownFiles = new Set(listFiles().map((f) => f.name));
     broadcast('status', { job: publicJob() });
     broadcast('files', { counts: fileCounts() });
@@ -540,6 +587,8 @@ function deleteAsset(name) {
     if (path.dirname(target) !== OUT_DIR || !fs.existsSync(target) || !fs.statSync(target).isFile()) continue;
     try {
       fs.unlinkSync(target);
+      const metaTarget = metaFile(candidate);
+      if (fs.existsSync(metaTarget)) fs.unlinkSync(metaTarget);
       removed += 1;
     } catch {
       return { error: `gagal menghapus ${candidate}`, code: 500 };

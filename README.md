@@ -241,7 +241,9 @@ Job yang dihentikan tidak menjalankan transcode dan tidak menyimpan output akhir
 
 Galeri memuat hasil **per halaman** (12 item) lewat `GET /api/files?page=N&limit=12&type=all|image|video`; SSE hanya mengirim jumlah file, bukan seluruh daftar. Filter Gambar/Video dan tombol Prev/Next memicu request baru, sehingga daftar besar tidak dikirim sekaligus.
 
-Klik thumbnail untuk membuka lightbox; navigasi ←/→ dan tombol Prev/Next di lightbox berjalan di dalam halaman aktif. Tombol download memakai `?download=1` agar server mengirim `Content-Disposition: attachment`. Tombol hapus memanggil `POST /api/delete` dengan `{ "name": "..." }`; untuk MP4/AVI, varian pasangannya ikut dihapus. File yang sedang dipakai job aktif tidak bisa dihapus.
+Klik thumbnail untuk membuka lightbox; navigasi ←/→ dan tombol Prev/Next di lightbox berjalan di dalam halaman aktif. Lightbox juga menampilkan detail hasil: prompt lengkap, negative prompt, durasi proses, waktu selesai, frame, resolusi, steps, dan CFG. Detail disimpan otomatis sebagai file sidecar `.json` di sebelah hasil (`wan-....mp4.json` atau `wan-....png.json`) dan ikut dihapus saat file media dihapus. Hasil yang dibuat sebelum fitur ini tidak punya sidecar, sehingga detailnya ditandai tidak tersedia.
+
+Tombol download memakai `?download=1` agar server mengirim `Content-Disposition: attachment`. Tombol hapus memanggil `POST /api/delete` dengan `{ "name": "..." }`; untuk MP4/AVI, varian pasangannya ikut dihapus. File yang sedang dipakai job aktif tidak bisa dihapus.
 
 Grid memakai `auto-fill` responsif: otomatis 1 kolom di layar sempit, 2–3 kolom di mobile/tablet, dan lebih banyak di desktop.
 
