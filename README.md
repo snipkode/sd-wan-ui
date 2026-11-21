@@ -219,6 +219,14 @@ Saat ada inference aktif, tombol **Stop** muncul di sebelah status job. Tombol i
 
 Job yang dihentikan tidak menjalankan transcode dan tidak menyimpan output akhir. File yang sudah ditulis sebelum stop tetap muncul di galeri. Lewat SSE, perubahan status langsung terkirim ke UI tanpa refresh.
 
+## Galeri hasil
+
+Galeri memuat hasil **per halaman** (12 item) lewat `GET /api/files?page=N&limit=12&type=all|image|video`; SSE hanya mengirim jumlah file, bukan seluruh daftar. Filter Gambar/Video dan tombol Prev/Next memicu request baru, sehingga daftar besar tidak dikirim sekaligus.
+
+Klik thumbnail untuk membuka lightbox; navigasi ←/→ dan tombol Prev/Next di lightbox berjalan di dalam halaman aktif. Tombol download memakai `?download=1` agar server mengirim `Content-Disposition: attachment`. Tombol hapus memanggil `POST /api/delete` dengan `{ "name": "..." }`; untuk MP4/AVI, varian pasangannya ikut dihapus. File yang sedang dipakai job aktif tidak bisa dihapus.
+
+Grid memakai `auto-fill` responsif: otomatis 1 kolom di layar sempit, 2–3 kolom di mobile/tablet, dan lebih banyak di desktop.
+
 ## Preset durasi dan kualitas video
 
 Saat mode **Video** aktif, UI menyediakan dua selector, **Durasi video** dan **Kualitas**. **Durasi** mengisi `frames`; **Kualitas** mengisi `steps`, `cfg`, `width`, dan `height`. Nilai tetap bisa diedit manual setelah preset dipilih. Preset **Kualitas** juga bisa dipakai di mode **Gambar** untuk mengisi `steps`/resolusi tanpa mengubah `frames=1`.

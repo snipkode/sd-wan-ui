@@ -210,7 +210,7 @@ button {
   font-weight: 650;
 }
 .chip.active { color: #fff; background: var(--blue); border-color: transparent; }
-.gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
+.gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
 .card {
   min-width: 0;
   overflow: hidden;
@@ -219,7 +219,7 @@ button {
   border-radius: 14px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, .28);
 }
-.media { position: relative; background: #000; }
+.media { position: relative; background: #000; cursor: zoom-in; }
 .card img, .card video { display: block; width: 100%; height: 130px; }
 .card img { object-fit: cover; }
 .card video { object-fit: contain; }
@@ -239,7 +239,81 @@ button {
 .meta a { min-width: 0; overflow: hidden; color: var(--text); font-size: 10px; text-decoration: none; text-overflow: ellipsis; white-space: nowrap; }
 .meta a:hover { color: var(--cyan); }
 .size { flex: none; color: var(--muted); font-size: 9px; }
+.download {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  color: var(--cyan);
+  background: rgba(100, 210, 255, .12);
+  border: 1px solid rgba(100, 210, 255, .3);
+  font-size: 12px;
+  text-decoration: none;
+}
+.download:hover { background: rgba(100, 210, 255, .2); }
+.delete {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  color: var(--red);
+  background: rgba(255, 69, 58, .1);
+  border: 1px solid rgba(255, 69, 58, .28);
+  font-size: 11px;
+  font-weight: 700;
+}
+.delete:hover { background: rgba(255, 69, 58, .18); }
 .empty { padding: 18px; color: var(--muted); text-align: center; font-size: 11px; border: 1px dashed var(--stroke); border-radius: 14px; }
+.pagination { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 10px; }
+.page-btn {
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  color: var(--text);
+  background: rgba(255, 255, 255, .08);
+  border: 1px solid var(--stroke);
+  font-size: 11px;
+  font-weight: 650;
+}
+.page-btn:disabled { opacity: .4; cursor: not-allowed; }
+#pageInfo { min-width: 56px; color: var(--muted); font-size: 10px; text-align: center; }
+.lightbox {
+  position: relative;
+  width: min(calc(100vw - 24px), 960px);
+  max-width: none;
+  max-height: calc(100vh - 24px);
+  padding: 12px;
+  color: var(--text);
+  background: rgba(10, 10, 12, .96);
+  border: 1px solid var(--stroke);
+  border-radius: 16px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, .7);
+}
+.lightbox::backdrop { background: rgba(0, 0, 0, .78); backdrop-filter: blur(6px); }
+.lightbox-media { display: flex; align-items: center; justify-content: center; min-height: 180px; }
+.lightbox-media img, .lightbox-media video { display: block; max-width: 100%; max-height: calc(100vh - 120px); width: auto; height: auto; border-radius: 10px; }
+.lightbox-close, .lightbox-nav {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text);
+  background: rgba(255, 255, 255, .1);
+  border: 1px solid var(--stroke);
+  font-weight: 700;
+}
+.lightbox-close { top: 8px; right: 8px; width: 30px; height: 30px; border-radius: 50%; font-size: 16px; }
+.lightbox-nav { top: 50%; width: 34px; height: 34px; border-radius: 50%; transform: translateY(-50%); font-size: 18px; }
+.lightbox-nav.prev { left: 8px; }
+.lightbox-nav.next { right: 8px; }
+.lightbox-nav:disabled { opacity: .3; cursor: not-allowed; }
+.lightbox-caption { margin-top: 8px; color: var(--muted); font-size: 11px; text-align: center; overflow-wrap: anywhere; }
 @media (min-width: 700px) {
   main { padding: 16px; }
   .adv { grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -255,7 +329,7 @@ button {
   main { gap: 10px; padding: 10px 8px calc(18px + env(safe-area-inset-bottom)); }
   .surface { padding: 11px; border-radius: 14px; }
   .gallery-head { align-items: flex-start; }
-  .gallery { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+  .gallery { gap: 6px; }
   .card img, .card video { height: 100px; }
   .meta { padding: 6px; }
   .log { max-height: 96px; font-size: 9px; }
@@ -263,7 +337,6 @@ button {
 @media (max-width: 360px) {
   .mode, .preset, .quick, .adv { grid-template-columns: 1fr; }
   .adv .wide { grid-column: auto; }
-  .gallery { grid-template-columns: 1fr; }
   .filters { width: 100%; }
 }
 </style>
@@ -368,8 +441,20 @@ button {
     </div>
     <div id="gallery" class="gallery"></div>
     <p id="empty" class="empty" hidden>Belum ada hasil.</p>
+    <div id="pagination" class="pagination" hidden>
+      <button id="prevPage" class="page-btn" type="button">← Prev</button>
+      <span id="pageInfo">1 / 1</span>
+      <button id="nextPage" class="page-btn" type="button">Next →</button>
+    </div>
   </section>
 </main>
+<dialog id="lightbox" class="lightbox">
+  <button id="lightboxClose" class="lightbox-close" type="button" aria-label="Tutup">×</button>
+  <button id="lightboxPrev" class="lightbox-nav prev" type="button" aria-label="Sebelumnya">‹</button>
+  <div id="lightboxMedia" class="lightbox-media"></div>
+  <button id="lightboxNext" class="lightbox-nav next" type="button" aria-label="Berikutnya">›</button>
+  <p id="lightboxCaption" class="lightbox-caption"></p>
+</dialog>
 <script>
 const $ = (id) => document.getElementById(id);
 const conn = $('conn');
@@ -389,13 +474,28 @@ const presetHint = $('presetHint');
 const presetRow = $('presetRow');
 const modeImage = $('modeImage');
 const modeVideo = $('modeVideo');
+const pagination = $('pagination');
+const prevPage = $('prevPage');
+const nextPage = $('nextPage');
+const pageInfo = $('pageInfo');
+const lightbox = $('lightbox');
+const lightboxMedia = $('lightboxMedia');
+const lightboxCaption = $('lightboxCaption');
+const lightboxClose = $('lightboxClose');
+const lightboxPrev = $('lightboxPrev');
+const lightboxNext = $('lightboxNext');
 
 let generateMode = 'image';
 let presetData = null;
-let allFiles = [];
+let galleryFiles = [];
 let activeFilter = 'all';
+let currentPage = 1;
+let galleryLoading = false;
+let galleryPending = false;
+let lightboxIndex = -1;
 let currentJob = null;
 let logReady = false;
+const PAGE_SIZE = 12;
 const ACTIVE_STATUSES = ['starting', 'running', 'decoding', 'encoding', 'stopping'];
 
 if (window.innerWidth < 700) $('advanced').open = false;
@@ -535,14 +635,52 @@ function renderJob(job) {
   stopBtn.textContent = job.status === 'stopping' ? 'Stopping…' : 'Stop';
 }
 
-function applyFilter() {
+function renderCounts(counts) {
+  if (!counts) return;
+  fileCount.textContent = `${counts.all} file · ${counts.video} video`;
+}
+
+function renderLightbox() {
+  const f = galleryFiles[lightboxIndex];
+  lightboxMedia.textContent = '';
+  lightboxPrev.disabled = lightboxIndex <= 0;
+  lightboxNext.disabled = lightboxIndex >= galleryFiles.length - 1;
+  if (!f) {
+    lightboxCaption.textContent = '';
+    return;
+  }
+  const src = `/out/${encodeURIComponent(f.name)}`;
+  if (f.type === 'video') {
+    const video = document.createElement('video');
+    video.src = src;
+    video.controls = true;
+    video.autoplay = true;
+    video.playsInline = true;
+    lightboxMedia.appendChild(video);
+  } else {
+    const img = document.createElement('img');
+    img.src = src;
+    img.alt = f.name;
+    lightboxMedia.appendChild(img);
+  }
+  lightboxCaption.textContent = `${f.name} · ${fmt(f.size)}`;
+}
+
+function showLightbox(index) {
+  if (index < 0 || index >= galleryFiles.length) return;
+  lightboxIndex = index;
+  renderLightbox();
+  if (!lightbox.open) lightbox.showModal();
+}
+
+function renderGallery(files) {
+  galleryFiles = files;
   gallery.textContent = '';
-  const list = allFiles.filter((f) => activeFilter === 'all' || f.type === activeFilter);
-  empty.hidden = list.length > 0;
+  empty.hidden = files.length > 0;
   empty.textContent = activeFilter === 'video'
     ? 'Belum ada video. Set Frames > 1 saat generate.'
     : 'Belum ada hasil.';
-  for (const f of list) {
+  files.forEach((f, index) => {
     const card = document.createElement('div');
     card.className = 'card';
     const media = document.createElement('div');
@@ -566,6 +704,8 @@ function applyFilter() {
       img.loading = 'lazy';
       media.appendChild(img);
     }
+    media.addEventListener('click', () => showLightbox(index));
+
     const meta = document.createElement('div');
     meta.className = 'meta';
     const link = document.createElement('a');
@@ -577,17 +717,75 @@ function applyFilter() {
     const size = document.createElement('span');
     size.className = 'size';
     size.textContent = fmt(f.size);
-    meta.append(link, size);
+    const download = document.createElement('a');
+    download.className = 'download';
+    download.href = `${src}?download=1`;
+    download.download = f.name;
+    download.title = 'Download';
+    download.textContent = '↓';
+    download.setAttribute('aria-label', `Download ${f.name}`);
+    const remove = document.createElement('button');
+    remove.className = 'delete';
+    remove.type = 'button';
+    remove.textContent = '×';
+    remove.title = 'Hapus';
+    remove.setAttribute('aria-label', `Hapus ${f.name}`);
+    remove.addEventListener('click', () => deleteAssetFile(f.name));
+    meta.append(link, size, download, remove);
     card.append(media, meta);
     gallery.appendChild(card);
+  });
+}
+
+async function deleteAssetFile(name) {
+  if (!confirm(`Hapus ${name}?`)) return;
+  try {
+    const response = await fetch('/api/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'gagal menghapus file');
+    if (lightbox.open && galleryFiles[lightboxIndex] && galleryFiles[lightboxIndex].name === name) lightbox.close();
+    pushLog(`hapus: ${name}`);
+    await loadFiles(currentPage);
+  } catch (err) {
+    pushLog(`ERROR: ${err.message}`);
+    alert(err.message);
   }
 }
 
-function renderFiles(files) {
-  allFiles = files;
-  const videos = files.filter((f) => f.type === 'video').length;
-  fileCount.textContent = `${files.length} file · ${videos} video`;
-  applyFilter();
+async function loadFiles(targetPage = currentPage) {
+  if (galleryLoading) {
+    galleryPending = true;
+    return;
+  }
+  galleryLoading = true;
+  prevPage.disabled = true;
+  nextPage.disabled = true;
+  try {
+    const params = new URLSearchParams({ page: String(targetPage), limit: String(PAGE_SIZE), type: activeFilter });
+    const response = await fetch(`/api/files?${params}`);
+    if (!response.ok) throw new Error('gagal memuat hasil');
+    const data = await response.json();
+    currentPage = data.page;
+    renderCounts(data.counts);
+    renderGallery(data.files);
+    pageInfo.textContent = `${data.page} / ${data.pages}`;
+    pagination.hidden = data.pages <= 1;
+    prevPage.disabled = !data.hasPrev;
+    nextPage.disabled = !data.hasNext;
+  } catch (err) {
+    empty.hidden = false;
+    empty.textContent = `Gagal memuat hasil: ${err.message}`;
+  } finally {
+    galleryLoading = false;
+    if (galleryPending) {
+      galleryPending = false;
+      loadFiles(currentPage);
+    }
+  }
 }
 
 const es = new EventSource('/api/stream');
@@ -596,12 +794,15 @@ es.addEventListener('error', () => setConn('reconnect', false));
 es.addEventListener('hello', (event) => {
   const data = JSON.parse(event.data);
   renderJob(data.job);
-  renderFiles(data.files);
+  renderCounts(data.counts);
 });
 es.addEventListener('status', (event) => renderJob(JSON.parse(event.data).job));
 es.addEventListener('progress', (event) => renderProgress(JSON.parse(event.data).progress));
 es.addEventListener('log', (event) => pushLog(JSON.parse(event.data).line));
-es.addEventListener('files', (event) => renderFiles(JSON.parse(event.data).files));
+es.addEventListener('files', (event) => {
+  renderCounts(JSON.parse(event.data).counts);
+  loadFiles(currentPage);
+});
 es.addEventListener('file', (event) => pushLog(`file baru: ${event.data ? JSON.parse(event.data).file.name : ''}`));
 
 modeImage.addEventListener('click', () => setMode('image'));
@@ -610,6 +811,7 @@ presetDuration.addEventListener('change', applyPreset);
 presetQuality.addEventListener('change', applyPreset);
 setMode('image');
 loadPresets();
+loadFiles(1);
 
 $('genForm').addEventListener('submit', async (event) => {
   event.preventDefault();
@@ -667,9 +869,28 @@ for (const chip of document.querySelectorAll('.chip')) {
   chip.addEventListener('click', () => {
     activeFilter = chip.dataset.filter;
     for (const c of document.querySelectorAll('.chip')) c.classList.toggle('active', c === chip);
-    applyFilter();
+    loadFiles(1);
   });
 }
+
+prevPage.addEventListener('click', () => loadFiles(currentPage - 1));
+nextPage.addEventListener('click', () => loadFiles(currentPage + 1));
+lightboxClose.addEventListener('click', () => lightbox.close());
+lightboxPrev.addEventListener('click', () => showLightbox(lightboxIndex - 1));
+lightboxNext.addEventListener('click', () => showLightbox(lightboxIndex + 1));
+lightbox.addEventListener('close', () => {
+  lightboxMedia.textContent = '';
+  lightboxCaption.textContent = '';
+});
+lightbox.addEventListener('keydown', (event) => {
+  if (event.key === 'ArrowLeft') {
+    event.preventDefault();
+    showLightbox(lightboxIndex - 1);
+  } else if (event.key === 'ArrowRight') {
+    event.preventDefault();
+    showLightbox(lightboxIndex + 1);
+  }
+});
 
 setInterval(async () => {
   try {

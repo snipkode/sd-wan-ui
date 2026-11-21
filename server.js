@@ -64,6 +64,8 @@ const DURATION_PRESETS = [10, 15, 25, 30, 60].map((seconds) => {
 });
 
 const MAX_FRAMES = Math.max(...DURATION_PRESETS.map((d) => d.frames));
+const DEFAULT_PAGE_SIZE = 12;
+const MAX_PAGE_SIZE = 48;
 
 const SEC_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
@@ -147,6 +149,35 @@ function listFiles() {
     })
     .filter((f) => /\.(png|jpe?g|webp|mp4|webm|mov|avi)$/i.test(f.name))
     .sort((a, b) => b.mtime.localeCompare(a.mtime));
+}
+
+function fileCounts() {
+  const files = listFiles();
+  return {
+    all: files.length,
+    image: files.filter((f) => f.type === 'image').length,
+    video: files.filter((f) => f.type === 'video').length
+  };
+}
+
+function filePage(pageValue, limitValue, typeValue) {
+  const all = listFiles();
+  const type = typeValue === 'image' || typeValue === 'video' ? typeValue : 'all';
+  const filtered = type === 'all' ? all : all.filter((f) => f.type === type);
+  const limit = clampInt(limitValue, 1, MAX_PAGE_SIZE, DEFAULT_PAGE_SIZE);
+  const pages = Math.max(1, Math.ceil(filtered.length / limit));
+  const page = Math.min(pages, Math.max(1, clampInt(pageValue, 1, pages, 1)));
+  const start = (page - 1) * limit;
+  return {
+    files: filtered.slice(start, start + limit),
+    page,
+    pages,
+    limit,
+    total: filtered.length,
+    counts: fileCounts(),
+    hasPrev: page > 1,
+    hasNext: page < pages
+  };
 }
 
 function publicJob() {
@@ -426,7 +457,7 @@ function startJob(config) {
     }
     knownFiles = new Set(listFiles().map((f) => f.name));
     broadcast('status', { job: publicJob() });
-    broadcast('files', { files: listFiles() });
+    broadcast('files', { counts: fileCounts() });
     saveState();
   });
 
@@ -462,6 +493,48 @@ function cancelJob() {
   }
 
   return publicJob();
+}
+
+function deleteAsset(name) {
+  if (!safeName(name)) return { error: 'nama file tidak valid', code: 400 };
+  const file = path.join(OUT_DIR, name);
+  if (path.dirname(file) !== OUT_DIR) return { error: 'nama file tidak valid', code: 400 };
+  if (!fs.existsSync(file) || !fs.statSync(file).isFile()) return { error: 'file tidak ditemukan', code: 404 };
+  if (job && ACTIVE_JOB_STATUSES.includes(job.status) && job.output === name) {
+    return { error: 'file sedang dipakai job aktif', code: 409 };
+  }
+
+  const base = name.replace(/\.(mp4|avi)$/i, '');
+  const candidates = /\.(mp4|avi)$/i.test(name) ? [name, `${base}.mp4`, `${base}.avi`] : [name];
+  let removed = 0;
+  for (const candidate of candidates) {
+    if (!safeName(candidate)) continue;
+    const target = path.join(OUT_DIR, candidate);
+    if (path.dirname(target) !== OUT_DIR || !fs.existsSync(target) || !fs.statSync(target).isFile()) continue;
+    try {
+      fs.unlinkSync(target);
+      removed += 1;
+    } catch {
+      return { error: `gagal menghapus ${candidate}`, code: 500 };
+    }
+  }
+
+  knownFiles = new Set(listFiles().map((f) => f.name));
+  broadcast('files', { counts: fileCounts() });
+  return { ok: true, removed };
+}
+
+async function handleDelete(req, res) {
+  let body;
+  try {
+    body = JSON.parse((await readBody(req)) || '{}');
+  } catch (err) {
+    return send(res, 400, { error: `invalid JSON: ${err.message}` });
+  }
+
+  const result = deleteAsset(String(body.name || ''));
+  if (result.error) return send(res, result.code, { error: result.error });
+  return send(res, 200, result);
 }
 
 async function handleGenerate(req, res) {
@@ -502,7 +575,7 @@ function handleStream(req, res) {
     Connection: 'keep-alive',
     'X-Accel-Buffering': 'no'
   });
-  res.write(`event: hello\ndata: ${JSON.stringify({ job: publicJob(), files: listFiles(), time: now() })}\n\n`);
+  res.write(`event: hello\ndata: ${JSON.stringify({ job: publicJob(), counts: fileCounts(), time: now() })}\n\n`);
   clients.add(res);
   const ping = setInterval(() => {
     try {
@@ -518,7 +591,7 @@ function handleStream(req, res) {
   });
 }
 
-function handleOut(req, res, pathname) {
+function handleOut(req, res, pathname, download) {
   let name;
   try {
     name = decodeURIComponent(pathname.slice('/out/'.length));
@@ -537,6 +610,7 @@ function handleOut(req, res, pathname) {
   if (!st.isFile()) return send(res, 404, { error: 'not found' });
 
   const type = contentType(name);
+  const disposition = download ? { 'Content-Disposition': `attachment; filename="${name}"` } : {};
   const range = String(req.headers.range || '');
   const match = /bytes=(\d+)-(\d*)/.exec(range);
   if (match) {
@@ -550,7 +624,8 @@ function handleOut(req, res, pathname) {
         'Content-Length': safeEnd - start + 1,
         'Content-Range': `bytes ${start}-${safeEnd}/${st.size}`,
         'Accept-Ranges': 'bytes',
-        'Cache-Control': 'no-store'
+        'Cache-Control': 'no-store',
+        ...disposition
       });
       fs.createReadStream(file, { start, end: safeEnd }).pipe(res);
       return;
@@ -562,7 +637,8 @@ function handleOut(req, res, pathname) {
     'Content-Type': type,
     'Content-Length': st.size,
     'Accept-Ranges': 'bytes',
-    'Cache-Control': 'no-store'
+    'Cache-Control': 'no-store',
+    ...disposition
   });
   const stream = fs.createReadStream(file);
   stream.on('error', () => res.destroy());
@@ -577,7 +653,7 @@ setInterval(() => {
   const fresh = files.filter((f) => !knownFiles.has(f.name));
   if (fresh.length || files.length !== knownFiles.size) {
     knownFiles = new Set(files.map((f) => f.name));
-    broadcast('files', { files });
+    broadcast('files', { counts: fileCounts() });
     for (const f of fresh) broadcast('file', { file: f });
   }
 }, 1000).unref();
@@ -610,8 +686,8 @@ const server = http.createServer(async (req, res) => {
   if (!checkAuth(req, res)) return;
 
   if (p === '/' || p === '/index.html') return send(res, 200, HTML, 'text/html; charset=utf-8');
-  if (p === '/api/status') return send(res, 200, { job: publicJob(), files: listFiles() });
-  if (p === '/api/files') return send(res, 200, { files: listFiles() });
+  if (p === '/api/status') return send(res, 200, { job: publicJob(), counts: fileCounts() });
+  if (p === '/api/files') return send(res, 200, filePage(url.searchParams.get('page'), url.searchParams.get('limit'), url.searchParams.get('type')));
   if (p === '/api/presets') return send(res, 200, {
     fps: VIDEO_FPS,
     maxFrames: MAX_FRAMES,
@@ -629,7 +705,11 @@ const server = http.createServer(async (req, res) => {
     if (!stopped) return send(res, 409, { error: 'tidak ada job aktif' });
     return send(res, 200, { job: stopped });
   }
-  if (p.startsWith('/out/')) return handleOut(req, res, p);
+  if (p === '/api/delete') {
+    if (req.method !== 'POST') return send(res, 405, { error: 'method not allowed' });
+    return handleDelete(req, res);
+  }
+  if (p.startsWith('/out/')) return handleOut(req, res, p, url.searchParams.get('download') === '1');
   return send(res, 404, { error: 'not found' });
 });
 
