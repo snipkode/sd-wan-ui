@@ -86,52 +86,71 @@ main {
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 8px;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
-h2 { font-size: 15px; font-weight: 640; letter-spacing: -.2px; }
+.gen-form { display: block; }
+.gen-group + .gen-group {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--stroke);
+}
+h2 { font-size: 16px; font-weight: 640; letter-spacing: -.2px; }
 .sub, .clock { font-size: 11px; margin-top: 2px; }
+.clock {
+  flex: none;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: rgba(118, 118, 128, .14);
+  border: 1px solid rgba(255, 255, 255, .06);
+}
 label {
   display: block;
-  margin-bottom: 4px;
+  margin-bottom: 5px;
   color: var(--muted);
-  font-size: 10px;
-  font-weight: 650;
-  letter-spacing: .25px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .1px;
 }
 textarea, input, select {
   width: 100%;
   min-width: 0;
-  min-height: 38px;
-  padding: 8px 10px;
+  min-height: 42px;
+  padding: 10px 12px;
   color: var(--text);
-  background: rgba(255, 255, 255, .06);
-  border: 1px solid var(--stroke);
-  border-radius: 10px;
+  background: rgba(118, 118, 128, .14);
+  border: 1px solid rgba(255, 255, 255, .07);
+  border-radius: 12px;
   outline: none;
   font: inherit;
-  font-size: 14px;
+  font-size: 15px;
 }
-textarea { min-height: 62px; resize: vertical; line-height: 1.35; }
-textarea:focus, input:focus, select:focus { border-color: rgba(10, 132, 255, .8); box-shadow: 0 0 0 3px rgba(10, 132, 255, .16); }
+textarea { min-height: 84px; resize: vertical; line-height: 1.4; }
+select { text-overflow: ellipsis; }
+textarea:focus, input:focus, select:focus { border-color: rgba(10, 132, 255, .8); box-shadow: 0 0 0 3px rgba(10, 132, 255, .16); background: rgba(118, 118, 128, .2); }
 input[disabled], select:disabled { color: var(--muted); opacity: .7; }
 select option { background: #1c1c1e; color: var(--text); }
-small { display: block; font-size: 9px; margin-top: 3px; }
-.prompt-label { margin-top: 8px; }
+small { display: block; font-size: 10px; margin-top: 4px; line-height: 1.35; }
+.prompt-label { margin-top: 0; }
+#presetHint { margin-top: 8px; }
 #presetHint.warn { color: var(--red); }
-.preset, .quick, .adv { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.preset, .quick, .adv { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .preset > div, .quick > div, .adv > div { min-width: 0; }
 .preset.single { grid-template-columns: 1fr; }
-.quick { margin-top: 8px; }
-details { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--stroke); }
+.quick { margin-top: 10px; }
+details { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--stroke); }
 summary {
+  display: flex;
+  align-items: center;
   cursor: pointer;
   list-style: none;
   color: var(--blue);
-  font-size: 11px;
-  font-weight: 650;
+  font-size: 12px;
+  font-weight: 600;
 }
 summary::-webkit-details-marker { display: none; }
-details[open] .adv { margin-top: 8px; }
+summary::after { content: '›'; margin-left: auto; color: var(--muted); font-size: 17px; line-height: 1; transition: transform .18s ease; }
+details[open] summary::after { transform: rotate(90deg); }
+details[open] .adv { margin-top: 10px; }
 .adv .wide { grid-column: 1 / -1; }
 button {
   font: inherit;
@@ -140,22 +159,30 @@ button {
 }
 .primary {
   width: 100%;
-  min-height: 40px;
-  margin-top: 10px;
-  border-radius: 12px;
+  min-height: 46px;
+  margin-top: 16px;
+  border-radius: 14px;
   color: #fff;
-  background: linear-gradient(135deg, var(--blue), #0071e3);
-  font-size: 14px;
-  font-weight: 650;
-  box-shadow: 0 8px 24px rgba(10, 132, 255, .3);
+  background: linear-gradient(180deg, #0a84ff, #0071e3);
+  font-size: 15px;
+  font-weight: 640;
+  box-shadow: 0 10px 26px rgba(10, 132, 255, .28), inset 0 1px rgba(255, 255, 255, .25);
   transition: transform .12s ease, opacity .12s ease;
 }
 .primary:active { transform: scale(.985); }
 .primary:disabled { opacity: .55; cursor: not-allowed; box-shadow: none; }
-.mode { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 3px; border: 1px solid var(--stroke); border-radius: 11px; background: rgba(255, 255, 255, .04); }
-.mode button { min-height: 32px; border-radius: 8px; color: var(--muted); background: transparent; font-size: 12px; font-weight: 650; }
-.mode button.active { color: var(--text); background: rgba(10, 132, 255, .22); box-shadow: inset 0 0 0 1px rgba(10, 132, 255, .4); }
-.status { display: flex; align-items: center; gap: 8px; margin-top: 10px; min-width: 0; }
+.mode { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 4px; border: 1px solid rgba(255, 255, 255, .06); border-radius: 14px; background: rgba(118, 118, 128, .16); }
+.mode button { min-height: 36px; border-radius: 10px; color: var(--muted); background: transparent; font-size: 13px; font-weight: 600; transition: background .18s ease, color .18s ease; }
+.mode button.active { color: var(--text); background: rgba(255, 255, 255, .15); box-shadow: 0 1px 4px rgba(0, 0, 0, .28); }
+.status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--stroke);
+  min-width: 0;
+}
 .badge {
   flex: none;
   padding: 4px 8px;
@@ -184,17 +211,17 @@ button {
 }
 .stop:disabled { opacity: .5; cursor: not-allowed; }
 #jobMeta { min-width: 0; color: var(--muted); font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.track { height: 4px; margin-top: 8px; border-radius: 999px; background: rgba(255, 255, 255, .1); overflow: hidden; }
+.track { height: 5px; margin-top: 10px; border-radius: 999px; background: rgba(118, 118, 128, .28); overflow: hidden; }
 #barFill { width: 0; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--blue), var(--cyan)); transition: width .25s ease; }
 .log {
-  max-height: 120px;
-  margin: 8px 0 0;
-  padding: 8px 10px;
+  max-height: 130px;
+  margin: 10px 0 0;
+  padding: 10px 12px;
   overflow: auto;
   color: #d1d1d6;
-  background: rgba(0, 0, 0, .34);
-  border: 1px solid var(--stroke);
-  border-radius: 10px;
+  background: rgba(118, 118, 128, .12);
+  border: 1px solid rgba(255, 255, 255, .06);
+  border-radius: 12px;
   font: 10px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -323,19 +350,29 @@ button {
   .card img, .card video { height: 140px; }
 }
 @media (max-width: 520px) {
-  header { padding-left: 10px; padding-right: 10px; }
-  h1 { font-size: 14px; }
-  header p { font-size: 10px; }
-  main { gap: 10px; padding: 10px 8px calc(18px + env(safe-area-inset-bottom)); }
-  .surface { padding: 11px; border-radius: 14px; }
+  header { padding-left: 16px; padding-right: 16px; }
+  h1 { font-size: 16px; }
+  header p { font-size: 11px; }
+  main { gap: 16px; padding: 12px 12px calc(24px + env(safe-area-inset-bottom)); }
+  .surface { padding: 16px; border-radius: 20px; }
+  .section-head { align-items: center; margin-bottom: 16px; }
+  h2 { font-size: 18px; letter-spacing: -.4px; }
+  .gen-group + .gen-group { margin-top: 16px; padding-top: 16px; }
+  textarea, input, select { min-height: 44px; font-size: 16px; }
+  textarea { min-height: 96px; }
+  .mode button { min-height: 38px; }
+  .primary { min-height: 48px; }
+  .status { margin-top: 16px; padding-top: 16px; }
   .gallery-head { align-items: flex-start; }
-  .gallery { gap: 6px; }
-  .card img, .card video { height: 100px; }
-  .meta { padding: 6px; }
-  .log { max-height: 96px; font-size: 9px; }
+  .gallery { gap: 8px; }
+  .card img, .card video { height: 110px; }
+  .meta { padding: 7px; }
+  .log { max-height: 120px; font-size: 10px; }
 }
 @media (max-width: 360px) {
-  .mode, .preset, .quick, .adv { grid-template-columns: 1fr; }
+  main { padding-left: 10px; padding-right: 10px; }
+  .surface { padding: 14px; }
+  .preset, .quick, .adv { grid-template-columns: 1fr; }
   .adv .wide { grid-column: auto; }
   .filters { width: 100%; }
 }
@@ -358,65 +395,71 @@ button {
       </div>
       <span id="clock" class="clock">—</span>
     </div>
-    <form id="genForm">
-      <div class="mode" role="group" aria-label="Mode generate">
-        <button type="button" id="modeImage" class="active" aria-pressed="true">Gambar</button>
-        <button type="button" id="modeVideo" aria-pressed="false">Video</button>
+    <form id="genForm" class="gen-form">
+      <div class="gen-group">
+        <div class="mode" role="group" aria-label="Mode generate">
+          <button type="button" id="modeImage" class="active" aria-pressed="true">Gambar</button>
+          <button type="button" id="modeVideo" aria-pressed="false">Video</button>
+        </div>
+        <div class="preset" id="presetRow">
+          <div>
+            <label for="presetDuration">Durasi video</label>
+            <select id="presetDuration">
+              <option value="">Pilih durasi</option>
+            </select>
+          </div>
+          <div>
+            <label for="presetQuality">Kualitas</label>
+            <select id="presetQuality">
+              <option value="">Pilih kualitas</option>
+            </select>
+          </div>
+        </div>
+        <small id="presetHint">Pilih durasi + kualitas untuk mengisi config otomatis.</small>
       </div>
-      <div class="preset" id="presetRow">
-        <div>
-          <label for="presetDuration">Durasi video</label>
-          <select id="presetDuration">
-            <option value="">Pilih durasi</option>
-          </select>
-        </div>
-        <div>
-          <label for="presetQuality">Kualitas</label>
-          <select id="presetQuality">
-            <option value="">Pilih kualitas</option>
-          </select>
-        </div>
+      <div class="gen-group">
+        <label for="prompt" class="prompt-label">Prompt</label>
+        <textarea id="prompt" maxlength="500" spellcheck="false">a lovely cat walking in neon rain, cinematic lighting, shallow depth of field</textarea>
       </div>
-      <small id="presetHint">Pilih durasi + kualitas untuk mengisi config otomatis.</small>
-      <label for="prompt" class="prompt-label">Prompt</label>
-      <textarea id="prompt" maxlength="500" spellcheck="false">a lovely cat walking in neon rain, cinematic lighting, shallow depth of field</textarea>
-      <div class="quick">
-        <div>
-          <label for="frames">Frames</label>
-          <input id="frames" type="number" min="1" max="961" value="1">
-          <small>1 = PNG, &gt;1 = video</small>
+      <div class="gen-group">
+        <div class="quick">
+          <div>
+            <label for="frames">Frames</label>
+            <input id="frames" type="number" min="1" max="961" value="1">
+            <small>1 = PNG, &gt;1 = video</small>
+          </div>
+          <div>
+            <label for="steps">Steps</label>
+            <input id="steps" type="number" min="1" max="50" value="10">
+            <small>CPU: 4–10 cukup</small>
+          </div>
         </div>
-        <div>
-          <label for="steps">Steps</label>
-          <input id="steps" type="number" min="1" max="50" value="10">
-          <small>CPU: 4–10 cukup</small>
-        </div>
+        <details id="advanced">
+          <summary>Pengaturan lanjutan</summary>
+          <div class="adv">
+            <div>
+              <label for="cfg">CFG</label>
+              <input id="cfg" type="number" min="0" max="20" step="0.5" value="6">
+            </div>
+            <div>
+              <label for="sampler">Sampler</label>
+              <input id="sampler" value="euler" disabled>
+            </div>
+            <div>
+              <label for="width">Width</label>
+              <input id="width" type="number" min="256" max="1024" step="16" value="512">
+            </div>
+            <div>
+              <label for="height">Height</label>
+              <input id="height" type="number" min="256" max="1024" step="16" value="320">
+            </div>
+            <div class="wide">
+              <label for="negative">Negative prompt</label>
+              <input id="negative" maxlength="500" value="blurry, low quality, watermark, text">
+            </div>
+          </div>
+        </details>
       </div>
-      <details id="advanced">
-        <summary>Pengaturan lanjutan</summary>
-        <div class="adv">
-          <div>
-            <label for="cfg">CFG</label>
-            <input id="cfg" type="number" min="0" max="20" step="0.5" value="6">
-          </div>
-          <div>
-            <label for="sampler">Sampler</label>
-            <input id="sampler" value="euler" disabled>
-          </div>
-          <div>
-            <label for="width">Width</label>
-            <input id="width" type="number" min="256" max="1024" step="16" value="512">
-          </div>
-          <div>
-            <label for="height">Height</label>
-            <input id="height" type="number" min="256" max="1024" step="16" value="320">
-          </div>
-          <div class="wide">
-            <label for="negative">Negative prompt</label>
-            <input id="negative" maxlength="500" value="blurry, low quality, watermark, text">
-          </div>
-        </div>
-      </details>
       <button id="genBtn" class="primary" type="submit">Generate Gambar</button>
     </form>
     <div class="status">
