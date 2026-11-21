@@ -226,12 +226,18 @@ Untuk video, server meminta `.avi` ke `sd-cli`, lalu setelah container selesai m
 
 UI menyediakan toggle **Gambar** / **Video** di bagian atas form. Default adalah **Gambar**.
 
-- **Gambar**: `frames` dikunci ke `1`, selector durasi disembunyikan, dan tombol berubah menjadi **Generate Gambar**. Preset kualitas tetap dipakai untuk mengisi `steps`, `cfg`, `width`, dan `height`.
+- **Gambar**: `frames` dikunci ke `1`, selector durasi disembunyikan, dan tombol berubah menjadi **Generate Gambar**. Preset kualitas tetap dipakai untuk mengisi `steps` dan `cfg`; ukuran diatur terpisah lewat kontrol Ukuran/Orientasi.
 - **Video**: selector durasi aktif, minimal `frames` menjadi `2`, dan tombol berubah menjadi **Generate Video**. Jika `frames` masih `1` saat berpindah ke mode video, nilai diisi `9` sebagai default cepat.
 
 Toggle ini hanya mengubah UI dan payload yang dikirim; backend tetap menentukan gambar/video dari nilai `frames`.
 
-Di sebelahnya ada toggle **Preset / Manual**. Default **Preset** menampilkan pilihan durasi, kualitas, dan field **Ukuran gambar** yang terisi otomatis, misalnya `512×320 px`, lalu menyembunyikan input mentah. **Manual** menyembunyikan preset, menampilkan `frames`/`steps`, dan membuka **Pengaturan lanjutan** berisi CFG, width, height, serta negative prompt. Keduanya mengirim payload yang sama ke backend.
+Di sebelahnya ada toggle **Preset / Manual**. Default **Preset** menampilkan durasi, kualitas, **Orientasi** (Lanskap/Potret), dan **Ukuran** dengan tiga pilihan:
+
+- **Ikut kualitas** — memakai ukuran bawaan kualitas, lalu memutarnya saat Orientasi Potret.
+- **List ukuran** — `320×256`, `512×320`, `640×400`, atau `768×512 px`, juga ikut diputar oleh Orientasi.
+- **Manual** — menampilkan input lebar dan tinggi sendiri. Nilai harus 256–1024 px dan kelipatan 16, sama seperti validasi backend.
+
+Pilihan ukuran apa pun tetap mengisi `width`/`height` yang dikirim ke backend. **Manual** menyembunyikan preset, menampilkan `frames`/`steps`, dan membuka **Pengaturan lanjutan** berisi CFG, width, height, serta negative prompt.
 
 ## Estimasi proses selesai
 
@@ -255,6 +261,7 @@ Tahap aktif berwarna biru, tahap selesai hijau, dan tahap gagal merah. Server me
 Semua penjelasan untuk user awam digabung dalam satu popup yang dibuka lewat tombol **Panduan cepat** di bawah form. Isinya:
 
 - **Steps** adalah jumlah koreksi/denoising. `steps=20` berarti model mengoreksi hasilnya sekitar 20 kali. Makin tinggi biasanya makin detail, tapi makin lama dan hampir linear di CPU. Rekomendasi: `4` coba cepat, `10` seimbang, `20` detail halus.
+- **Ukuran & orientasi**: ukuran Preset bisa ikut kualitas, dari list, atau Manual; Lanskap/Potret memutar ukuran yang dipilih.
 - **Urutan pipeline** lengkap dengan model di tiap tahap: text encoder → diffusion → VAE → video encode → output.
 - **Kontrol manual**: CFG mengatur kekuatan mengikuti prompt (`6` aman), sampler memakai `euler` karena cepat/stabil di CPU, dan negative prompt berisi hal yang ingin dihindari seperti `blur` atau `watermark`.
 
