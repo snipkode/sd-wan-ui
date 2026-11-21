@@ -56,21 +56,53 @@ flowchart LR
 | `.env.example` | Contoh konfigurasi lingkungan |
 | `state.json` | Disimpan otomatis saat runtime; tidak ikut di-commit |
 
-## Model
+## Detail model
 
-| Komponen | File | Alasan |
-| --- | --- | --- |
-| Diffusion | `wan2.1_t2v_1.3b-q4_k_m.gguf` | Sesuai permintaan: Wan 1.3B Q4_K_M |
-| Text encoder | `umt5-xxl-encoder-Q3_K_S.gguf` | Q8 tidak muat; Q3_K_S tetap near-original dengan ukuran lebih kecil |
-| VAE | `taew2_1.safetensors` | TAEHV kecil dipakai sebagai pengganti VAE penuh agar hemat disk |
+Pipeline Wan T2V memakai tiga model yang dipanggil berurutan oleh `sd-cli`:
 
-Total parameter memori yang dilaporkan `sd-cli`: sekitar **3.7 GB RAM**, dengan compute buffer tambahan saat decoding.
+| Tahap | File | Ukuran | Fungsi | Kenapa dipilih |
+| --- | --- | --- | --- | --- |
+| Text conditioning | `umt5-xxl-encoder-Q3_K_S.gguf` | 2.7 GB | Mengubah prompt positif dan negatif jadi embedding teks | UMT5-XXL adalah encoder teks yang diharapkan Wan. Q8 tidak muat di disk/RAM host uji, jadi dipakai Q3_K_S yang jauh lebih kecil dengan kualitas masih memadai untuk prompt pendek |
+| Diffusion / denoising | `wan2.1_t2v_1.3b-q4_k_m.gguf` | 987 MB | Model Wan 2.1 T2V 1.3B yang membuat latent video dari embedding teks | Sesuai permintaan. Q4_K_M adalah titik seimbang antara ukuran dan akurasi, serta muat di RAM 7.8 GB |
+| VAE decode | `taew2_1.safetensors` | 22 MB | Mendekode latent video menjadi frame akhir | VAE Wan penuh jauh lebih besar. TAEHV membuat total model hanya ~3.7 GB dan decoding jauh lebih ringan di CPU |
+
+Total file model di disk: **~3.7 GB**. `sd-cli` juga melaporkan total parameter memori ~3.7 GB ditambah compute buffer saat conditioning dan decoding.
+
+Tahap internal yang terlihat di log runtime:
+
+1. `load_backend` memilih backend `ggml-cpu` karena auto-fit mendeteksi `no GPU devices`.
+2. `get_learned_condition` menjalankan UMT5 untuk prompt positif dan negatif.
+3. `generate_video` menjalankan sampling FLOW/Euler pada diffusion model selama `--steps` langkah.
+4. `decode_video_outputs` memanggil TAEHV mengubah latent `40x32x3x16` menjadi `320x256x9x3`.
+5. `save result` menulis hasil ke `/output`, lalu Node menyalin daftar file ke UI.
 
 Sumber model:
 
 - `https://huggingface.co/calcuis/wan-1.3b-gguf/resolve/main/wan2.1_t2v_1.3b-q4_k_m.gguf`
 - `https://huggingface.co/city96/umt5-xxl-encoder-gguf/resolve/main/umt5-xxl-encoder-Q3_K_S.gguf`
 - `https://github.com/madebyollin/taehv/raw/refs/heads/main/safetensors/taew2_1.safetensors`
+
+## Fungsi `stable-diffusion.cpp` yang dipakai
+
+Semua argumen dirakit di `startJob()` (`server.js:223`). Berikut arti dan alasannya:
+
+| Argumen | Fungsi | Kenapa |
+| --- | --- | --- |
+| `-M vid_gen` | Mengaktifkan mode video generation Wan | Tanpa ini, `--video-frames` saja tidak cukup untuk menghasilkan video |
+| `--diffusion-model ...q4_k_m.gguf` | Memuat checkpoint diffusion utama | Mesin denoising Wan 1.3B; Q4_K_M sesuai target ukuran/akurasi |
+| `--t5xxl ...Q3_K_S.gguf` | Memuat text encoder UMT5-XXL | Wan memerlukan conditioning teks; Q3_K_S dipilih agar muat resource |
+| `--taesd ...taew2_1.safetensors` | Memakai TAEHV sebagai VAE pengganti | Lebih ringan dari VAE penuh, cukup untuk preview video |
+| `-p` / `-n` | Prompt positif dan negatif | Diolah oleh T5 sebelum masuk diffusion model |
+| `--cfg-scale 6.0` | Mengontrol seberapa kuat prompt memandu sampling | 6.0 cukup mengarah tanpa efek berlebih pada Wan CPU |
+| `--sampling-method euler` | Solver sampling FLOW | Cukup cepat dan stabil di CPU dibanding solver yang lebih kompleks |
+| `--flow-shift 3.0` | Menyesuaikan jadwal noise FLOW | Nilai umum untuk Wan dan aman di step rendah |
+| `--steps` | Jumlah langkah denoising | 4 untuk smoke test cepat, 10 untuk kualitas uji |
+| `-W` / `-H` | Resolusi frame | 320x256 dipakai saat uji video agar 2 core CPU tidak kewalahan; server memaksa kelipatan 16 |
+| `--video-frames` | Jumlah frame yang dibuat | `1` menghasilkan PNG, `>1` menghasilkan video |
+| `-o /output/<nama>` | Path output di dalam container | `/root/out` di-mount ke `/output`, sehingga Node/UI bisa membaca hasilnya |
+| `-v` | Logging verbose | Server mem-parsing progres dan path hasil dari baris log verbose |
+
+Backend dipilih otomatis sebagai CPU. Tidak ada flag CUDA/Vulkan karena host tidak memiliki GPU dan image resmi CPU yang dipakai adalah build Ubuntu x86_64 biasa.
 
 ## API
 
@@ -123,7 +155,9 @@ Salin `.env.example` menjadi `.env`, lalu sesuaikan:
 
 Jika `UI_TOKEN` kosong, UI terbuka tanpa auth. Untuk deployment publik, disarankan mengisinya dan menaruh reverse proxy dengan TLS di depan.
 
-## Menjalankan
+## Deployment
+
+### Development / akses langsung
 
 ```bash
 ./scripts/download-models.sh
@@ -132,12 +166,103 @@ cp .env.example .env
 ./scripts/start-ui.sh
 ```
 
-Buka `http://<host>:3001`.
+Buka `http://<host>:3001`. Mode ini cocok untuk pengujian lokal. Jika UI diekspos langsung ke internet, **wajib** isi `UI_TOKEN` karena tanpa reverse proxy tidak ada TLS.
 
 Inference manual tanpa UI:
 
 ```bash
 FRAMES=9 STEPS=4 WIDTH=320 HEIGHT=256 ./scripts/infer.sh "a lovely cat walking in neon rain"
+```
+
+### Production dengan systemd + reverse proxy TLS
+
+1. Isi `/root/sd-ui/.env`:
+
+```env
+HOST=127.0.0.1
+PORT=3001
+UI_TOKEN=ganti-dengan-token-kuat
+OUT_DIR=/root/out
+MODEL_DIR=/root/models/wan
+SD_IMAGE=sd-cpu:local
+```
+
+`HOST=127.0.0.1` disarankan bila reverse proxy berada di host yang sama. Jika tetap memakai `0.0.0.0`, batasi akses lewat firewall dan aktifkan `UI_TOKEN`.
+
+2. Buat `/etc/systemd/system/sd-wan-ui.service`:
+
+```ini
+[Unit]
+Description=sd-wan-ui
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+WorkingDirectory=/root/sd-ui
+EnvironmentFile=/root/sd-ui/.env
+ExecStart=/usr/bin/node /root/sd-ui/server.js
+Restart=always
+RestartSec=3
+User=root
+
+[Install]
+WantedBy=multi-user.target
+```
+
+`User=root` dipakai karena proses harus mengakses Docker socket. Jika memakai user non-root, pastikan user tersebut masuk grup `docker` (catatan: akses Docker setara root).
+
+3. Aktifkan service:
+
+```bash
+systemctl daemon-reload
+systemctl enable --now sd-wan-ui
+journalctl -u sd-wan-ui -f
+```
+
+4. Pasang reverse proxy TLS. Contoh Caddy:
+
+```caddyfile
+sd.example.com {
+    reverse_proxy 127.0.0.1:3001
+}
+```
+
+Alternatif lain: Nginx + Let's Encrypt, Cloudflare Tunnel, atau Tailscale Funnel. Caddy sudah otomatis mengurus sertifikat HTTPS.
+
+5. Verifikasi:
+
+```bash
+curl http://127.0.0.1:3001/api/health
+curl -u sd:$UI_TOKEN http://127.0.0.1:3001/api/files
+```
+
+Tanpa auth, flag `-u` tidak diperlukan.
+
+6. Update aplikasi:
+
+```bash
+cd /root/sd-ui
+git pull
+systemctl restart sd-wan-ui
+```
+
+`state.json` dan isi `OUT_DIR` tidak berubah saat restart.
+
+### Kebutuhan resource
+
+- Model: ~3.7 GB di disk.
+- Image Docker + cache build: siapkan ruang tambahan beberapa GB.
+- RAM: minimum ~7 GB untuk conditioning + diffusion + TAEHV.
+- CPU: 2 core bisa, tapi 9 frame `320x256` / 4 step memakan ~113 detik.
+- Host uji hanya memiliki sisa disk ~275 MB setelah instalasi, jadi lakukan cleanup atau tambah disk sebelum generate video panjang.
+
+Contoh cleanup aman:
+
+```bash
+docker image prune -f
+docker builder prune -f
+rm -f /root/out/*.avi
 ```
 
 ## Catatan video
@@ -160,7 +285,7 @@ Pada host uji, 9 frame `320x256` dengan 4 step memakan waktu sekitar **113 detik
 - Security headers: `nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, dan CSP.
 - Job state bertahan di `state.json`; job yang sedang berjalan saat server restart ditandai error.
 - `OUT_DIR`, model, log, PID, `.env`, dan `state.json` tidak ikut di-commit.
-- Belum ada TLS bawaan; gunakan Nginx/Caddy/Cloudflare Tunnel untuk HTTPS.
+- Belum ada TLS bawaan; gunakan Nginx/Caddy/Cloudflare Tunnel untuk HTTPS dan sebaiknya bind `HOST=127.0.0.1` di belakang proxy.
 
 ## Struktur direktori
 
