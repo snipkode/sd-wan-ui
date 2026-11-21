@@ -164,6 +164,7 @@ flowchart LR
 | `scripts/build-ui-image.sh` | Build image UI `sd-wan-ui:local` |
 | `scripts/build-all-image.sh` | Build image all-in-one `sd-wan:local` |
 | `scripts/publish-images.sh` | Tag dan push image all-in-one + inference + UI ke Docker Hub |
+| `scripts/update-hub-docs.js` | Update deskripsi dan panduan tiga repo Docker Hub dari `docker login` lokal |
 | `scripts/infer.sh` | Inference manual tanpa UI |
 | `scripts/start-ui.sh` | Menjalankan UI dengan `.env` opsional |
 | `.env.example` | Contoh konfigurasi lingkungan |
@@ -486,6 +487,14 @@ DOCKERHUB_USER=snipkode ./scripts/publish-images.sh
 ```
 
 Script publish mendorong tiga image: `sd-wan-infer`, `sd-wan-ui`, dan `sd-wan`.
+
+Deskripsi dan panduan Docker Hub bisa diperbarui ulang dengan kredensial `docker login` yang sudah tersimpan:
+
+```bash
+./scripts/update-hub-docs.js
+```
+
+Script ini membaca `~/.docker/config.json`, login ke Docker Hub API, lalu memperbarui deskripsi ketiga repo. Token tidak disimpan atau ditampilkan.
 
 ## Deployment
 
