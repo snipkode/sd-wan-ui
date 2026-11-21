@@ -1,0 +1,506 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>SD UI — Wan 1.3B</title>
+<style>
+:root {
+  color-scheme: dark;
+  --bg: #000;
+  --panel: rgba(28, 28, 30, .82);
+  --panel-2: rgba(44, 44, 46, .72);
+  --stroke: rgba(255, 255, 255, .11);
+  --text: #f5f5f7;
+  --muted: #98989f;
+  --blue: #0a84ff;
+  --cyan: #64d2ff;
+  --green: #30d158;
+  --red: #ff453a;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--text);
+  background: radial-gradient(1100px 520px at 50% -12%, #18304f 0%, #05070b 52%, #000 100%) fixed, #000;
+  -webkit-font-smoothing: antialiased;
+}
+header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: calc(12px + env(safe-area-inset-top)) 18px 12px;
+  background: rgba(0, 0, 0, .62);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border-bottom: 1px solid var(--stroke);
+}
+h1, h2, p { margin: 0; }
+h1 { font-size: 17px; font-weight: 650; letter-spacing: -.35px; }
+h1 span { color: var(--muted); font-weight: 500; }
+header p, .sub, .clock, small { color: var(--muted); }
+header p { font-size: 11px; margin-top: 2px; }
+.pill {
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .4px;
+  text-transform: uppercase;
+  background: rgba(255, 255, 255, .08);
+  color: var(--muted);
+  border: 1px solid var(--stroke);
+}
+.pill.ok { background: rgba(48, 209, 88, .14); color: var(--green); }
+.pill.bad { background: rgba(255, 69, 58, .14); color: var(--red); }
+main {
+  width: min(100%, 940px);
+  margin: 0 auto;
+  padding: 16px 14px calc(28px + env(safe-area-inset-bottom));
+  display: grid;
+  gap: 18px;
+}
+.surface {
+  background: var(--panel);
+  border: 1px solid var(--stroke);
+  border-radius: 22px;
+  padding: 16px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, .38);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+.section-head, .gallery-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+h2 { font-size: 15px; font-weight: 640; letter-spacing: -.2px; }
+.sub, .clock { font-size: 11px; margin-top: 2px; }
+label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: .25px;
+}
+textarea, input {
+  width: 100%;
+  min-height: 44px;
+  padding: 11px 12px;
+  color: var(--text);
+  background: rgba(255, 255, 255, .06);
+  border: 1px solid var(--stroke);
+  border-radius: 12px;
+  outline: none;
+  font: inherit;
+  font-size: 15px;
+}
+textarea { min-height: 76px; resize: vertical; line-height: 1.35; }
+textarea:focus, input:focus { border-color: rgba(10, 132, 255, .8); box-shadow: 0 0 0 3px rgba(10, 132, 255, .16); }
+input[disabled] { color: var(--muted); opacity: .7; }
+small { display: block; font-size: 10px; margin-top: 5px; }
+.quick { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 10px; }
+details { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--stroke); }
+summary {
+  cursor: pointer;
+  list-style: none;
+  color: var(--blue);
+  font-size: 12px;
+  font-weight: 650;
+}
+summary::-webkit-details-marker { display: none; }
+details[open] .adv { margin-top: 10px; }
+.adv { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.adv .wide { grid-column: 1 / -1; }
+button {
+  font: inherit;
+  cursor: pointer;
+  border: 0;
+}
+.primary {
+  width: 100%;
+  min-height: 46px;
+  margin-top: 14px;
+  border-radius: 14px;
+  color: #fff;
+  background: linear-gradient(135deg, var(--blue), #0071e3);
+  font-size: 15px;
+  font-weight: 650;
+  box-shadow: 0 8px 24px rgba(10, 132, 255, .3);
+  transition: transform .12s ease, opacity .12s ease;
+}
+.primary:active { transform: scale(.985); }
+.primary:disabled { opacity: .55; cursor: not-allowed; box-shadow: none; }
+.status { display: flex; align-items: center; gap: 10px; margin-top: 14px; min-width: 0; }
+.badge {
+  flex: none;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: .5px;
+  text-transform: uppercase;
+  background: rgba(255, 255, 255, .08);
+  color: var(--muted);
+}
+.badge.ok { background: rgba(48, 209, 88, .16); color: var(--green); }
+.badge.bad { background: rgba(255, 69, 58, .16); color: var(--red); }
+.badge.busy { background: rgba(10, 132, 255, .18); color: var(--cyan); }
+#jobMeta { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.track { height: 5px; margin-top: 10px; border-radius: 999px; background: rgba(255, 255, 255, .1); overflow: hidden; }
+#barFill { width: 0; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--blue), var(--cyan)); transition: width .25s ease; }
+.log {
+  max-height: 180px;
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  overflow: auto;
+  color: #d1d1d6;
+  background: rgba(0, 0, 0, .34);
+  border: 1px solid var(--stroke);
+  border-radius: 12px;
+  font: 11px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.filters { display: flex; gap: 6px; flex: none; }
+.chip {
+  padding: 7px 12px;
+  border-radius: 999px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, .06);
+  border: 1px solid var(--stroke);
+  font-size: 11px;
+  font-weight: 650;
+}
+.chip.active { color: #fff; background: var(--blue); border-color: transparent; }
+.gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; }
+.card {
+  overflow: hidden;
+  background: var(--panel);
+  border: 1px solid var(--stroke);
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .28);
+}
+.media { position: relative; background: #000; }
+.card img, .card video { display: block; width: 100%; height: 158px; }
+.card img { object-fit: cover; }
+.card video { object-fit: contain; }
+.tag {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, .65);
+  color: var(--cyan);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .5px;
+}
+.meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 10px; }
+.meta a { min-width: 0; overflow: hidden; color: var(--text); font-size: 11px; text-decoration: none; text-overflow: ellipsis; white-space: nowrap; }
+.meta a:hover { color: var(--cyan); }
+.size { flex: none; color: var(--muted); font-size: 10px; }
+.empty { padding: 26px; color: var(--muted); text-align: center; font-size: 12px; border: 1px dashed var(--stroke); border-radius: 16px; }
+@media (min-width: 700px) {
+  main { padding: 24px; }
+  .adv { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .adv .wide { grid-column: span 2; }
+  .log { max-height: 230px; }
+}
+@media (max-width: 520px) {
+  header { padding-left: 14px; padding-right: 14px; }
+  h1 { font-size: 15px; }
+  main { gap: 14px; padding: 12px 10px calc(22px + env(safe-area-inset-bottom)); }
+  .surface { padding: 14px; border-radius: 18px; }
+  .gallery-head { align-items: center; }
+  .gallery { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .card img, .card video { height: 120px; }
+  .meta { padding: 8px; }
+  .log { max-height: 130px; font-size: 10px; }
+}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Wan 1.3B <span>· CPU</span></h1>
+    <p>stable-diffusion.cpp · realtime</p>
+  </div>
+  <span id="conn" class="pill">connecting</span>
+</header>
+<main>
+  <section class="surface">
+    <div class="section-head">
+      <div>
+        <h2>Generate</h2>
+        <p class="sub">Wan 2.1 T2V · Q4_K_M</p>
+      </div>
+      <span id="clock" class="clock">—</span>
+    </div>
+    <form id="genForm">
+      <label for="prompt">Prompt</label>
+      <textarea id="prompt" maxlength="500" spellcheck="false">a lovely cat walking in neon rain, cinematic lighting, shallow depth of field</textarea>
+      <div class="quick">
+        <div>
+          <label for="frames">Frames</label>
+          <input id="frames" type="number" min="1" max="81" value="1">
+          <small>1 = PNG, &gt;1 = video</small>
+        </div>
+        <div>
+          <label for="steps">Steps</label>
+          <input id="steps" type="number" min="1" max="50" value="10">
+          <small>CPU: 4–10 cukup</small>
+        </div>
+      </div>
+      <details id="advanced">
+        <summary>Pengaturan lanjutan</summary>
+        <div class="adv">
+          <div>
+            <label for="cfg">CFG</label>
+            <input id="cfg" type="number" min="0" max="20" step="0.5" value="6">
+          </div>
+          <div>
+            <label for="sampler">Sampler</label>
+            <input id="sampler" value="euler" disabled>
+          </div>
+          <div>
+            <label for="width">Width</label>
+            <input id="width" type="number" min="256" max="1024" step="16" value="512">
+          </div>
+          <div>
+            <label for="height">Height</label>
+            <input id="height" type="number" min="256" max="1024" step="16" value="320">
+          </div>
+          <div class="wide">
+            <label for="negative">Negative prompt</label>
+            <input id="negative" maxlength="500" value="blurry, low quality, watermark, text">
+          </div>
+        </div>
+      </details>
+      <button id="genBtn" class="primary" type="submit">Generate</button>
+    </form>
+    <div class="status">
+      <span id="jobStatus" class="badge">idle</span>
+      <span id="jobMeta">siap</span>
+    </div>
+    <div class="track"><div id="barFill"></div></div>
+    <pre id="log" class="log">Menunggu event...</pre>
+  </section>
+  <section>
+    <div class="gallery-head">
+      <div>
+        <h2>Hasil</h2>
+        <p id="fileCount" class="sub">0 file</p>
+      </div>
+      <div class="filters">
+        <button class="chip active" data-filter="all">Semua</button>
+        <button class="chip" data-filter="image">Gambar</button>
+        <button class="chip" data-filter="video">Video</button>
+      </div>
+    </div>
+    <div id="gallery" class="gallery"></div>
+    <p id="empty" class="empty" hidden>Belum ada hasil.</p>
+  </section>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const conn = $('conn');
+const log = $('log');
+const gallery = $('gallery');
+const empty = $('empty');
+const jobStatus = $('jobStatus');
+const jobMeta = $('jobMeta');
+const genBtn = $('genBtn');
+const barFill = $('barFill');
+const fileCount = $('fileCount');
+const clock = $('clock');
+
+let allFiles = [];
+let activeFilter = 'all';
+let currentJob = null;
+let logReady = false;
+
+if (window.innerWidth < 700) $('advanced').open = false;
+
+function setConn(text, ok) {
+  conn.textContent = text;
+  conn.className = `pill ${ok ? 'ok' : 'bad'}`;
+}
+
+function pushLog(line) {
+  if (!logReady) {
+    log.textContent = '';
+    logReady = true;
+  }
+  log.textContent += `${log.textContent ? '\n' : ''}${line}`;
+  const lines = log.textContent.split('\n');
+  if (lines.length > 140) log.textContent = lines.slice(-140).join('\n');
+  log.scrollTop = log.scrollHeight;
+}
+
+function fmt(size) {
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(0)} KB`;
+  return `${(size / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function renderProgress(progress) {
+  const pct = Math.max(0, Math.min(100, Number(progress && progress.percent) || 0));
+  barFill.style.width = `${pct}%`;
+  if (currentJob && ['starting', 'running', 'decoding'].includes(currentJob.status)) {
+    jobMeta.textContent = `${currentJob.frames} frame · ${pct}% · ${progress.current || 0}/${progress.total || currentJob.progress.total || 0}`;
+  }
+}
+
+function renderJob(job) {
+  currentJob = job;
+  if (!job) {
+    jobStatus.textContent = 'idle';
+    jobStatus.className = 'badge';
+    jobMeta.textContent = 'siap';
+    renderProgress({ percent: 0 });
+    genBtn.disabled = false;
+    genBtn.textContent = 'Generate';
+    return;
+  }
+  const busy = ['starting', 'running', 'decoding'].includes(job.status);
+  jobStatus.textContent = job.status;
+  jobStatus.className = `badge ${job.status === 'done' ? 'ok' : job.status === 'error' ? 'bad' : 'busy'}`;
+  if (job.error) jobMeta.textContent = job.error.slice(0, 110);
+  else if (job.status === 'done') jobMeta.textContent = job.output ? `selesai · ${job.output}` : 'selesai';
+  else jobMeta.textContent = `${job.frames} frame · ${job.progress.percent || 0}%`;
+  renderProgress(job.progress || { percent: 0 });
+  genBtn.disabled = busy;
+  genBtn.textContent = busy ? 'Generating…' : 'Generate';
+}
+
+function applyFilter() {
+  gallery.textContent = '';
+  const list = allFiles.filter((f) => activeFilter === 'all' || f.type === activeFilter);
+  empty.hidden = list.length > 0;
+  empty.textContent = activeFilter === 'video'
+    ? 'Belum ada video. Set Frames > 1 saat generate.'
+    : 'Belum ada hasil.';
+  for (const f of list) {
+    const card = document.createElement('div');
+    card.className = 'card';
+    const media = document.createElement('div');
+    media.className = 'media';
+    const src = `/out/${encodeURIComponent(f.name)}`;
+    if (f.type === 'video') {
+      const video = document.createElement('video');
+      video.src = src;
+      video.controls = true;
+      video.preload = 'metadata';
+      video.playsInline = true;
+      media.appendChild(video);
+      const tag = document.createElement('span');
+      tag.className = 'tag';
+      tag.textContent = 'VIDEO';
+      media.appendChild(tag);
+    } else {
+      const img = document.createElement('img');
+      img.src = src;
+      img.alt = f.name;
+      img.loading = 'lazy';
+      media.appendChild(img);
+    }
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    const link = document.createElement('a');
+    link.href = src;
+    link.target = '_blank';
+    link.rel = 'noopener';
+    link.textContent = f.name;
+    link.title = f.name;
+    const size = document.createElement('span');
+    size.className = 'size';
+    size.textContent = fmt(f.size);
+    meta.append(link, size);
+    card.append(media, meta);
+    gallery.appendChild(card);
+  }
+}
+
+function renderFiles(files) {
+  allFiles = files;
+  const videos = files.filter((f) => f.type === 'video').length;
+  fileCount.textContent = `${files.length} file · ${videos} video`;
+  applyFilter();
+}
+
+const es = new EventSource('/api/stream');
+es.addEventListener('open', () => setConn('live', true));
+es.addEventListener('error', () => setConn('reconnect', false));
+es.addEventListener('hello', (event) => {
+  const data = JSON.parse(event.data);
+  renderJob(data.job);
+  renderFiles(data.files);
+});
+es.addEventListener('status', (event) => renderJob(JSON.parse(event.data).job));
+es.addEventListener('progress', (event) => renderProgress(JSON.parse(event.data).progress));
+es.addEventListener('log', (event) => pushLog(JSON.parse(event.data).line));
+es.addEventListener('files', (event) => renderFiles(JSON.parse(event.data).files));
+es.addEventListener('file', (event) => pushLog(`file baru: ${event.data ? JSON.parse(event.data).file.name : ''}`));
+
+$('genForm').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const payload = {
+    prompt: $('prompt').value.trim(),
+    negative: $('negative').value.trim(),
+    frames: Number($('frames').value),
+    steps: Number($('steps').value),
+    cfg: Number($('cfg').value),
+    width: Number($('width').value),
+    height: Number($('height').value)
+  };
+  genBtn.disabled = true;
+  genBtn.textContent = 'Starting…';
+  try {
+    const response = await fetch('/api/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'gagal memulai inference');
+    logReady = false;
+    pushLog(`job ${data.job.id} dimulai · ${data.job.output}`);
+    renderJob(data.job);
+  } catch (err) {
+    pushLog(`ERROR: ${err.message}`);
+    alert(err.message);
+    renderJob(currentJob);
+  }
+});
+
+for (const chip of document.querySelectorAll('.chip')) {
+  chip.addEventListener('click', () => {
+    activeFilter = chip.dataset.filter;
+    for (const c of document.querySelectorAll('.chip')) c.classList.toggle('active', c === chip);
+    applyFilter();
+  });
+}
+
+setInterval(async () => {
+  try {
+    const response = await fetch('/api/health');
+    const data = await response.json();
+    clock.textContent = `up ${data.uptime}s`;
+  } catch {
+    clock.textContent = 'offline';
+  }
+}, 5000);
+</script>
+</body>
+</html>
