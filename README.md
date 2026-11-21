@@ -158,13 +158,15 @@ flowchart LR
 | `scripts/entrypoint.sh` | Memilih `ui` atau `sd-cli` saat container all-in-one dijalankan |
 | `docker-compose.yml` | Compose dua image, mount model/hasil, dan Docker socket |
 | `docker-compose.all.yml` | Compose all-in-one tanpa Docker socket |
+| `docker-compose.offline.yml` | Compose image offline dengan model sudah termasuk di image |
 | `.env.compose.example` | Contoh env untuk alur Docker Compose |
 | `scripts/download-models.sh` | Download model ke `MODEL_DIR` |
 | `scripts/build-image.sh` | Build image inference `sd-cpu:local` |
 | `scripts/build-ui-image.sh` | Build image UI `sd-wan-ui:local` |
 | `scripts/build-all-image.sh` | Build image all-in-one `sd-wan:local` |
 | `scripts/publish-images.sh` | Tag dan push image all-in-one + inference + UI ke Docker Hub |
-| `scripts/update-hub-docs.js` | Update deskripsi dan panduan tiga repo Docker Hub dari `docker login` lokal |
+| `scripts/push-offline-image.js` | Susun layer model lokal dan push `sd-wan-offline` langsung ke Docker Hub |
+| `scripts/update-hub-docs.js` | Update deskripsi dan panduan empat repo Docker Hub dari `docker login` lokal |
 | `scripts/infer.sh` | Inference manual tanpa UI |
 | `scripts/start-ui.sh` | Menjalankan UI dengan `.env` opsional |
 | `.env.example` | Contoh konfigurasi lingkungan |
@@ -403,9 +405,49 @@ Untuk memakai GPU nanti: siapkan image CUDA/Vulkan, set `SD_IMAGE=sd-gpu:local`,
 
 ## Menjalankan dengan Docker
 
-### Opsi 1 — all-in-one (disarankan)
+### Opsi 1 — full offline portable (paling mudah)
 
-Image `snipkode/sd-wan:latest` sudah berisi UI, `sd-cli`, dan ffmpeg. Inference dijalankan langsung di dalam container, jadi **tidak perlu mount Docker socket**.
+Image `snipkode/sd-wan-offline:latest` berisi UI, `sd-cli`, ffmpeg, **dan ketiga model Wan (~3.7 GB)** di dalam image. Tidak perlu download model dan tidak perlu mount `./models`.
+
+Dengan Compose:
+
+```bash
+git clone https://github.com/snipkode/sd-wan-ui.git
+cd sd-wan-ui
+mkdir -p out runtime
+cp .env.compose.example .env
+docker compose -f docker-compose.offline.yml up -d
+```
+
+Tanpa Compose:
+
+```bash
+mkdir -p out runtime
+docker run -d --name sd-wan-offline --restart unless-stopped \
+  -p 3001:3001 \
+  -v "$PWD/out:/output" \
+  -v "$PWD/runtime:/app/runtime" \
+  -e UI_TOKEN="${UI_TOKEN:-}" \
+  snipkode/sd-wan-offline:latest
+```
+
+Buka `http://<host>:3001`. Model sudah ada di `/models` di dalam image; `./out` dipakai untuk hasil dan `./runtime` untuk `state.json`.
+
+```bash
+curl http://127.0.0.1:3001/api/health
+docker logs -f sd-wan-offline
+docker compose -f docker-compose.offline.yml down
+```
+
+Ukuran image ini sekitar **4.15 GB terkompresi**, jadi pull pertama bisa lama. Untuk akun Docker Hub lain, ubah `SD_OFFLINE_IMAGE` di `.env` atau override:
+
+```bash
+SD_OFFLINE_IMAGE=username/sd-wan-offline:latest docker compose -f docker-compose.offline.yml up -d
+```
+
+### Opsi 2 — all-in-one dengan model di-mount
+
+Image `snipkode/sd-wan:latest` sudah berisi UI, `sd-cli`, dan ffmpeg. Inference dijalankan langsung di dalam container, jadi **tidak perlu mount Docker socket**, tetapi model tetap di-mount dari host.
 
 Dengan Compose:
 
@@ -444,7 +486,8 @@ docker run --rm snipkode/sd-wan:latest sd --help
 docker compose -f docker-compose.all.yml down
 ```
 
-Model tidak ikut di image karena ukurannya ~3.7 GB. Mount `./models` ke `/models`, `./out` ke `/output`, dan `./runtime` ke `/app/runtime`. State job tersimpan di `runtime/state.json`, jadi tidak hilang saat container di-recreate. Image all-in-one ini default CPU; untuk GPU pakai opsi dua image di bawah dengan image inference CUDA/Vulkan.
+Model tidak ikut di image `sd-wan` karena ukurannya ~3.7 GB. Mount `./models` ke `/models`, `./out` ke `/output`, dan `./runtime` ke `/app/runtime`.
+ State job tersimpan di `runtime/state.json`, jadi tidak hilang saat container di-recreate. Image all-in-one ini default CPU; untuk GPU pakai opsi dua image di bawah dengan image inference CUDA/Vulkan.
 
 Jika memakai akun Docker Hub lain, ubah `SD_ALL_IMAGE` di `.env`, atau override:
 
@@ -452,7 +495,7 @@ Jika memakai akun Docker Hub lain, ubah `SD_ALL_IMAGE` di `.env`, atau override:
 SD_ALL_IMAGE=username/sd-wan:latest docker compose -f docker-compose.all.yml up -d
 ```
 
-### Opsi 2 — dua image / split
+### Opsi 3 — dua image / split
 
 Mode lama memisahkan UI dan inference. UI butuh Docker socket untuk menjalankan container `sd-wan-infer`.
 
@@ -488,13 +531,21 @@ DOCKERHUB_USER=snipkode ./scripts/publish-images.sh
 
 Script publish mendorong tiga image: `sd-wan-infer`, `sd-wan-ui`, dan `sd-wan`.
 
+Image `sd-wan-offline` tidak dibuat oleh script di atas karena layer modelnya besar; image itu disusun dan didorong langsung ke registry memakai model lokal:
+
+```bash
+./scripts/push-offline-image.js
+```
+
+Script ini membaca model dari `./models/wan` dan kredensial dari `docker login`; tidak menyimpan image besar di disk lokal.
+
 Deskripsi dan panduan Docker Hub bisa diperbarui ulang dengan kredensial `docker login` yang sudah tersimpan:
 
 ```bash
 ./scripts/update-hub-docs.js
 ```
 
-Script ini membaca `~/.docker/config.json`, login ke Docker Hub API, lalu memperbarui deskripsi ketiga repo. Token tidak disimpan atau ditampilkan.
+Script ini membaca `~/.docker/config.json`, login ke Docker Hub API, lalu memperbarui deskripsi keempat repo. Token tidak disimpan atau ditampilkan.
 
 ## Deployment
 

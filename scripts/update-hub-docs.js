@@ -44,6 +44,42 @@ async function getHubToken() {
 }
 
 const docs = {
+  'sd-wan-offline': {
+    description: 'Full portable Wan 2.1 UI + offline models included. No model download needed.',
+    full_description: [
+      '# sd-wan-offline',
+      '',
+      'Full portable Docker image for **Wan 2.1 T2V 1.3B Q4_K_M** with the web UI, `sd-cli` CPU backend, ffmpeg, and the three Wan models bundled inside. No model download and no Docker socket are needed.',
+      '',
+      'Size is about **4.15 GB compressed**, so the first pull can take a while.',
+      '',
+      '## Docker Compose',
+      '',
+      '```bash',
+      'git clone https://github.com/snipkode/sd-wan-ui.git',
+      'cd sd-wan-ui',
+      'mkdir -p out runtime',
+      'cp .env.compose.example .env',
+      'docker compose -f docker-compose.offline.yml up -d',
+      '```',
+      '',
+      '## Plain docker run',
+      '',
+      '```bash',
+      'mkdir -p out runtime',
+      'docker run -d --name sd-wan-offline --restart unless-stopped -p 3001:3001 \\',
+      '  -v "$PWD/out:/output" \\',
+      '  -v "$PWD/runtime:/app/runtime" \\',
+      '  -e UI_TOKEN="${UI_TOKEN:-}" \\',
+      '  snipkode/sd-wan-offline:latest',
+      '```',
+      '',
+      'Open `http://<host>:3001`. Models are already at `/models` inside the image; only `./out` and `./runtime` need to be mounted.',
+      '',
+      'Set `UI_TOKEN` before exposing the UI to an untrusted network. Full documentation: https://github.com/snipkode/sd-wan-ui',
+      ''
+    ].join('\n')
+  },
   'sd-wan': {
     description: 'All-in-one Wan 2.1 T2V UI + sd-cli CPU + ffmpeg. No Docker socket needed.',
     full_description: [

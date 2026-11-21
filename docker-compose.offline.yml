@@ -1,0 +1,23 @@
+services:
+  sd-wan-offline:
+    image: ${SD_OFFLINE_IMAGE:-snipkode/sd-wan-offline:latest}
+    container_name: sd-wan-offline
+    ports:
+      - "${UI_PORT:-3001}:3001"
+    environment:
+      HOST: 0.0.0.0
+      PORT: "3001"
+      UI_TOKEN: ${UI_TOKEN:-}
+      MODEL_DIR: /models
+      OUT_DIR: /output
+      STATE_FILE: /app/runtime/state.json
+      SD_RUNNER: local
+      SD_CLI_BIN: /sd.cpp/bin/sd-cli
+      SD_BACKEND: ${SD_BACKEND:-cpu}
+      SD_EXTRA_ARGS: ${SD_EXTRA_ARGS:-}
+      FFMPEG_BIN: /usr/bin/ffmpeg
+      KEEP_AVI: ${KEEP_AVI:-0}
+    volumes:
+      - ./out:/output
+      - ./runtime:/app/runtime
+    restart: unless-stopped
