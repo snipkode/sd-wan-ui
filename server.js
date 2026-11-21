@@ -227,6 +227,12 @@ function filePage(pageValue, limitValue, typeValue) {
   };
 }
 
+function jobDurationMs(value) {
+  const started = Date.parse(value && value.startedAt);
+  const finished = Date.parse(value && value.finishedAt);
+  return Number.isFinite(started) && Number.isFinite(finished) ? Math.max(0, finished - started) : null;
+}
+
 function publicJob() {
   if (!job) return null;
   return {
@@ -234,6 +240,7 @@ function publicJob() {
     status: job.status,
     startedAt: job.startedAt,
     finishedAt: job.finishedAt,
+    durationMs: jobDurationMs(job),
     exitCode: job.exitCode,
     progress: job.progress,
     logs: job.logs.slice(-300),
@@ -509,8 +516,6 @@ function startJob(config) {
       job.status = code === 0 ? 'done' : 'error';
     }
     if (code === 0) {
-      const started = Date.parse(job.startedAt);
-      const finished = Date.parse(job.finishedAt);
       const meta = {
         prompt: config.prompt,
         negative: config.negative,
@@ -522,7 +527,7 @@ function startJob(config) {
         cfg: config.cfg,
         startedAt: job.startedAt,
         finishedAt: job.finishedAt,
-        durationMs: Number.isFinite(started) && Number.isFinite(finished) ? Math.max(0, finished - started) : null,
+        durationMs: jobDurationMs(job),
         status: job.status,
         warning: job.warning || null
       };

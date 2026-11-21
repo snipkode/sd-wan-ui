@@ -231,7 +231,11 @@ UI menyediakan toggle **Gambar** / **Video** di bagian atas form. Default adalah
 
 Toggle ini hanya mengubah UI dan payload yang dikirim; backend tetap menentukan gambar/video dari nilai `frames`.
 
-Di sebelahnya ada toggle **Preset / Manual**. Default **Preset** menampilkan pilihan durasi + kualitas dan menyembunyikan input mentah. **Manual** menyembunyikan preset, menampilkan `frames`/`steps`, dan membuka **Pengaturan lanjutan** berisi CFG, width, height, serta negative prompt. Keduanya mengirim payload yang sama ke backend.
+Di sebelahnya ada toggle **Preset / Manual**. Default **Preset** menampilkan pilihan durasi, kualitas, dan field **Ukuran gambar** yang terisi otomatis, misalnya `512×320 px`, lalu menyembunyikan input mentah. **Manual** menyembunyikan preset, menampilkan `frames`/`steps`, dan membuka **Pengaturan lanjutan** berisi CFG, width, height, serta negative prompt. Keduanya mengirim payload yang sama ke backend.
+
+## Estimasi proses selesai
+
+Saat job aktif, status menampilkan `ETA ... · selesai ~HH.MM` yang diperbarui tiap detik. Estimasi dihitung dari waktu berjalan dan persentase sampling yang dilaporkan `sd-cli`, jadi baru akurat setelah beberapa step pertama; sebelum itu tampil `ETA menghitung…`. Job selesai menampilkan durasi aktual, juga tersedia sebagai `durationMs` di `/api/status`.
 
 ## Menghentikan job
 

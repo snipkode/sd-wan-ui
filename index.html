@@ -180,6 +180,7 @@ button {
 .status {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   margin-top: 14px;
   padding-top: 14px;
@@ -201,6 +202,7 @@ button {
 .badge.bad { background: rgba(255, 69, 58, .16); color: var(--red); }
 .badge.busy { background: rgba(10, 132, 255, .18); color: var(--cyan); }
 .badge.stopped { background: rgba(255, 159, 10, .16); color: #ff9f0a; }
+.eta { color: var(--cyan); font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .stop {
   flex: none;
   min-height: 26px;
@@ -442,6 +444,10 @@ button {
               <option value="">Pilih kualitas</option>
             </select>
           </div>
+          <div>
+            <label for="presetSize">Ukuran gambar</label>
+            <input id="presetSize" value="—" disabled>
+          </div>
         </div>
         <small id="presetHint">Pilih durasi + kualitas untuk mengisi config otomatis.</small>
       </div>
@@ -489,6 +495,7 @@ button {
     <div class="status">
       <span id="jobStatus" class="badge">idle</span>
       <span id="jobMeta">siap</span>
+      <span id="eta" class="eta" hidden></span>
       <button id="stopBtn" class="stop" type="button" hidden>Stop</button>
     </div>
     <div class="track"><div id="barFill"></div></div>
@@ -531,6 +538,7 @@ const gallery = $('gallery');
 const empty = $('empty');
 const jobStatus = $('jobStatus');
 const jobMeta = $('jobMeta');
+const eta = $('eta');
 const genBtn = $('genBtn');
 const stopBtn = $('stopBtn');
 const barFill = $('barFill');
@@ -539,6 +547,7 @@ const clock = $('clock');
 const presetDuration = $('presetDuration');
 const presetQuality = $('presetQuality');
 const presetHint = $('presetHint');
+const presetSize = $('presetSize');
 const presetRow = $('presetRow');
 const presetPanel = $('presetPanel');
 const manualPanel = $('manualPanel');
@@ -589,6 +598,40 @@ function setConfigMode(mode) {
   else $('advanced').open = true;
 }
 
+function fmtEta(ms) {
+  if (!Number.isFinite(ms) || ms <= 0) return '<1 detik';
+  const seconds = Math.ceil(ms / 1000);
+  if (seconds < 60) return `${seconds} detik`;
+  const minutes = Math.floor(seconds / 60);
+  const restSeconds = seconds % 60;
+  if (minutes < 60) return restSeconds ? `${minutes} menit ${restSeconds} detik` : `${minutes} menit`;
+  const hours = Math.floor(minutes / 60);
+  const restMinutes = minutes % 60;
+  return restMinutes ? `${hours} jam ${restMinutes} menit` : `${hours} jam`;
+}
+
+function updateEta() {
+  if (!currentJob || !ACTIVE_STATUSES.includes(currentJob.status) || currentJob.status === 'stopping') {
+    eta.hidden = true;
+    return;
+  }
+  eta.hidden = false;
+  const started = Date.parse(currentJob.startedAt);
+  const elapsed = Number.isFinite(started) ? Math.max(0, Date.now() - started) : 0;
+  const progress = currentJob.progress || {};
+  const total = Number(progress.total) || 0;
+  const current = Number(progress.current) || 0;
+  const percent = Number(progress.percent) || 0;
+  const ratio = percent > 0 ? percent / 100 : total > 0 ? current / total : 0;
+  if (!ratio || elapsed < 3000) {
+    eta.textContent = `ETA menghitung… · berjalan ${fmtEta(elapsed)}`;
+    return;
+  }
+  const remaining = Math.max(0, elapsed / Math.min(1, ratio) - elapsed);
+  const finish = new Date(Date.now() + remaining).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+  eta.textContent = `ETA ~${fmtEta(remaining)} · selesai ~${finish}`;
+}
+
 if (window.innerWidth < 700) $('advanced').open = false;
 
 function setConn(text, ok) {
@@ -623,10 +666,11 @@ function applyPreset() {
     $('width').value = String(quality.width);
     $('height').value = String(quality.height);
   }
+  presetSize.value = quality ? `${quality.width}×${quality.height} px` : '—';
   if (generateMode === 'image') {
     $('frames').value = '1';
     presetHint.textContent = quality
-      ? `Mode gambar · ${quality.label} · ${quality.width}x${quality.height} · ${quality.steps} step`
+      ? `Mode gambar · ${quality.label} · ${quality.width}×${quality.height} px · ${quality.steps} step`
       : 'Mode gambar: frames dikunci ke 1. Pilih kualitas untuk mengisi config.';
     return;
   }
@@ -637,7 +681,7 @@ function applyPreset() {
   }
   $('frames').value = String(duration.frames);
   const warning = duration.frames >= 401 ? ' · berat, bisa sangat lama di CPU' : '';
-  presetHint.textContent = `${duration.frames} frame ≈ ${duration.actualSeconds}s · ${quality.label} · ${quality.width}x${quality.height} · ${quality.steps} step${warning}`;
+  presetHint.textContent = `${duration.frames} frame ≈ ${duration.actualSeconds}s · ${quality.label} · ${quality.width}×${quality.height} px · ${quality.steps} step${warning}`;
   if (duration.frames >= 401) presetHint.className = 'warn';
 }
 
@@ -657,7 +701,7 @@ async function loadPresets() {
     for (const [key, q] of Object.entries(presetData.qualities)) {
       const option = document.createElement('option');
       option.value = key;
-      option.textContent = `${q.label} · ${q.width}x${q.height} · ${q.steps} step`;
+      option.textContent = `${q.label} · ${q.width}×${q.height} px · ${q.steps} step`;
       presetQuality.appendChild(option);
     }
     $('frames').max = String(presetData.maxFrames);
@@ -696,6 +740,7 @@ function renderProgress(progress) {
   if (currentJob && ACTIVE_STATUSES.includes(currentJob.status) && currentJob.status !== 'stopping') {
     jobMeta.textContent = `${currentJob.frames} frame · ${pct}% · ${progress.current || 0}/${progress.total || currentJob.progress.total || 0}`;
   }
+  updateEta();
 }
 
 function renderJob(job) {
@@ -706,6 +751,7 @@ function renderJob(job) {
     jobStatus.className = 'badge';
     jobMeta.textContent = 'siap';
     renderProgress({ percent: 0 });
+    eta.hidden = true;
     genBtn.disabled = false;
     genBtn.textContent = genLabel;
     stopBtn.hidden = true;
@@ -717,7 +763,10 @@ function renderJob(job) {
   jobStatus.className = `badge ${tone}`;
   if (job.error) jobMeta.textContent = job.error.slice(0, 110);
   else if (job.warning) jobMeta.textContent = job.warning.slice(0, 110);
-  else if (job.status === 'done') jobMeta.textContent = job.output ? `selesai · ${job.output}` : 'selesai';
+  else if (job.status === 'done') {
+    const spent = Number.isFinite(job.durationMs) ? ` · ${fmtDuration(job.durationMs)}` : '';
+    jobMeta.textContent = job.output ? `selesai · ${job.output}${spent}` : `selesai${spent}`;
+  }
   else if (job.status === 'stopped') jobMeta.textContent = 'dihentikan · tanpa output akhir';
   else jobMeta.textContent = `${job.frames} frame · ${job.progress.percent || 0}%`;
   renderProgress(job.progress || { percent: 0 });
@@ -955,6 +1004,7 @@ setConfigMode('preset');
 setMode('image');
 loadPresets();
 loadFiles(1);
+setInterval(updateEta, 1000);
 
 $('genForm').addEventListener('submit', async (event) => {
   event.preventDefault();
