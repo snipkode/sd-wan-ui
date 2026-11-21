@@ -92,7 +92,7 @@ label {
   font-weight: 650;
   letter-spacing: .25px;
 }
-textarea, input {
+textarea, input, select {
   width: 100%;
   min-height: 44px;
   padding: 11px 12px;
@@ -105,9 +105,14 @@ textarea, input {
   font-size: 15px;
 }
 textarea { min-height: 76px; resize: vertical; line-height: 1.35; }
-textarea:focus, input:focus { border-color: rgba(10, 132, 255, .8); box-shadow: 0 0 0 3px rgba(10, 132, 255, .16); }
-input[disabled] { color: var(--muted); opacity: .7; }
+textarea:focus, input:focus, select:focus { border-color: rgba(10, 132, 255, .8); box-shadow: 0 0 0 3px rgba(10, 132, 255, .16); }
+input[disabled], select:disabled { color: var(--muted); opacity: .7; }
+select option { background: #1c1c1e; color: var(--text); }
 small { display: block; font-size: 10px; margin-top: 5px; }
+.prompt-label { margin-top: 12px; }
+#presetHint.warn { color: var(--red); }
+.preset { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.preset.single { grid-template-columns: 1fr; }
 .quick { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 10px; }
 details { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--stroke); }
 summary {
@@ -140,6 +145,9 @@ button {
 }
 .primary:active { transform: scale(.985); }
 .primary:disabled { opacity: .55; cursor: not-allowed; box-shadow: none; }
+.mode { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; padding: 4px; border: 1px solid var(--stroke); border-radius: 14px; background: rgba(255, 255, 255, .04); }
+.mode button { min-height: 38px; border-radius: 10px; color: var(--muted); background: transparent; font-size: 13px; font-weight: 650; }
+.mode button.active { color: var(--text); background: rgba(10, 132, 255, .22); box-shadow: inset 0 0 0 1px rgba(10, 132, 255, .4); }
 .status { display: flex; align-items: center; gap: 10px; margin-top: 14px; min-width: 0; }
 .badge {
   flex: none;
@@ -248,12 +256,31 @@ button {
       <span id="clock" class="clock">—</span>
     </div>
     <form id="genForm">
-      <label for="prompt">Prompt</label>
+      <div class="mode" role="group" aria-label="Mode generate">
+        <button type="button" id="modeImage" class="active" aria-pressed="true">Gambar</button>
+        <button type="button" id="modeVideo" aria-pressed="false">Video</button>
+      </div>
+      <div class="preset" id="presetRow">
+        <div>
+          <label for="presetDuration">Durasi video</label>
+          <select id="presetDuration">
+            <option value="">Pilih durasi</option>
+          </select>
+        </div>
+        <div>
+          <label for="presetQuality">Kualitas</label>
+          <select id="presetQuality">
+            <option value="">Pilih kualitas</option>
+          </select>
+        </div>
+      </div>
+      <small id="presetHint">Pilih durasi + kualitas untuk mengisi config otomatis.</small>
+      <label for="prompt" class="prompt-label">Prompt</label>
       <textarea id="prompt" maxlength="500" spellcheck="false">a lovely cat walking in neon rain, cinematic lighting, shallow depth of field</textarea>
       <div class="quick">
         <div>
           <label for="frames">Frames</label>
-          <input id="frames" type="number" min="1" max="81" value="1">
+          <input id="frames" type="number" min="1" max="961" value="1">
           <small>1 = PNG, &gt;1 = video</small>
         </div>
         <div>
@@ -287,7 +314,7 @@ button {
           </div>
         </div>
       </details>
-      <button id="genBtn" class="primary" type="submit">Generate</button>
+      <button id="genBtn" class="primary" type="submit">Generate Gambar</button>
     </form>
     <div class="status">
       <span id="jobStatus" class="badge">idle</span>
@@ -324,7 +351,15 @@ const genBtn = $('genBtn');
 const barFill = $('barFill');
 const fileCount = $('fileCount');
 const clock = $('clock');
+const presetDuration = $('presetDuration');
+const presetQuality = $('presetQuality');
+const presetHint = $('presetHint');
+const presetRow = $('presetRow');
+const modeImage = $('modeImage');
+const modeVideo = $('modeVideo');
 
+let generateMode = 'image';
+let presetData = null;
 let allFiles = [];
 let activeFilter = 'all';
 let currentJob = null;
@@ -354,6 +389,81 @@ function fmt(size) {
   return `${(size / 1024 / 1024).toFixed(1)} MB`;
 }
 
+function applyPreset() {
+  presetHint.className = '';
+  if (!presetData) return;
+  const quality = presetData.qualities[presetQuality.value];
+  if (quality) {
+    $('steps').value = String(quality.steps);
+    $('cfg').value = String(quality.cfg);
+    $('width').value = String(quality.width);
+    $('height').value = String(quality.height);
+  }
+  if (generateMode === 'image') {
+    $('frames').value = '1';
+    presetHint.textContent = quality
+      ? `Mode gambar · ${quality.label} · ${quality.width}x${quality.height} · ${quality.steps} step`
+      : 'Mode gambar: frames dikunci ke 1. Pilih kualitas untuk mengisi config.';
+    return;
+  }
+  const duration = presetData.durations.find((d) => String(d.seconds) === presetDuration.value);
+  if (!duration || !quality) {
+    presetHint.textContent = 'Pilih durasi + kualitas untuk mengisi config otomatis.';
+    return;
+  }
+  $('frames').value = String(duration.frames);
+  const warning = duration.frames >= 401 ? ' · berat, bisa sangat lama di CPU' : '';
+  presetHint.textContent = `${duration.frames} frame ≈ ${duration.actualSeconds}s · ${quality.label} · ${quality.width}x${quality.height} · ${quality.steps} step${warning}`;
+  if (duration.frames >= 401) presetHint.className = 'warn';
+}
+
+async function loadPresets() {
+  try {
+    const response = await fetch('/api/presets');
+    if (!response.ok) throw new Error('gagal memuat preset');
+    presetData = await response.json();
+    presetDuration.innerHTML = '<option value="">Pilih durasi</option>';
+    presetQuality.innerHTML = '<option value="">Pilih kualitas</option>';
+    for (const d of presetData.durations) {
+      const option = document.createElement('option');
+      option.value = String(d.seconds);
+      option.textContent = `${d.seconds} detik (${d.frames} frame)`;
+      presetDuration.appendChild(option);
+    }
+    for (const [key, q] of Object.entries(presetData.qualities)) {
+      const option = document.createElement('option');
+      option.value = key;
+      option.textContent = `${q.label} · ${q.width}x${q.height} · ${q.steps} step`;
+      presetQuality.appendChild(option);
+    }
+    $('frames').max = String(presetData.maxFrames);
+    applyPreset();
+  } catch (err) {
+    presetHint.textContent = `Preset tidak tersedia: ${err.message}`;
+    presetHint.className = 'warn';
+  }
+}
+
+function setMode(mode) {
+  generateMode = mode === 'video' ? 'video' : 'image';
+  const isImage = generateMode === 'image';
+  modeImage.classList.toggle('active', isImage);
+  modeVideo.classList.toggle('active', !isImage);
+  modeImage.setAttribute('aria-pressed', String(isImage));
+  modeVideo.setAttribute('aria-pressed', String(!isImage));
+  presetDuration.parentElement.hidden = isImage;
+  presetRow.classList.toggle('single', isImage);
+  presetDuration.disabled = isImage;
+  $('frames').disabled = isImage;
+  $('frames').min = isImage ? '1' : '2';
+  if (isImage) $('frames').value = '1';
+  else if (Number($('frames').value) < 2) $('frames').value = '9';
+  applyPreset();
+  if (!presetData) presetHint.textContent = isImage
+    ? 'Mode gambar: frames dikunci ke 1.'
+    : 'Mode video: pilih durasi + kualitas atau atur frames manual.';
+}
+
 function renderProgress(progress) {
   const pct = Math.max(0, Math.min(100, Number(progress && progress.percent) || 0));
   barFill.style.width = `${pct}%`;
@@ -364,13 +474,14 @@ function renderProgress(progress) {
 
 function renderJob(job) {
   currentJob = job;
+  const genLabel = generateMode === 'image' ? 'Generate Gambar' : 'Generate Video';
   if (!job) {
     jobStatus.textContent = 'idle';
     jobStatus.className = 'badge';
     jobMeta.textContent = 'siap';
     renderProgress({ percent: 0 });
     genBtn.disabled = false;
-    genBtn.textContent = 'Generate';
+    genBtn.textContent = genLabel;
     return;
   }
   const busy = ['starting', 'running', 'decoding', 'encoding'].includes(job.status);
@@ -382,7 +493,7 @@ function renderJob(job) {
   else jobMeta.textContent = `${job.frames} frame · ${job.progress.percent || 0}%`;
   renderProgress(job.progress || { percent: 0 });
   genBtn.disabled = busy;
-  genBtn.textContent = busy ? 'Generating…' : 'Generate';
+  genBtn.textContent = busy ? 'Generating…' : genLabel;
 }
 
 function applyFilter() {
@@ -454,8 +565,16 @@ es.addEventListener('log', (event) => pushLog(JSON.parse(event.data).line));
 es.addEventListener('files', (event) => renderFiles(JSON.parse(event.data).files));
 es.addEventListener('file', (event) => pushLog(`file baru: ${event.data ? JSON.parse(event.data).file.name : ''}`));
 
+modeImage.addEventListener('click', () => setMode('image'));
+modeVideo.addEventListener('click', () => setMode('video'));
+presetDuration.addEventListener('change', applyPreset);
+presetQuality.addEventListener('change', applyPreset);
+setMode('image');
+loadPresets();
+
 $('genForm').addEventListener('submit', async (event) => {
   event.preventDefault();
+  if (Number($('frames').value) >= 401 && !confirm(`Video ${$('frames').value} frame bisa memakan waktu sangat lama di CPU 2 core. Lanjutkan?`)) return;
   const payload = {
     prompt: $('prompt').value.trim(),
     negative: $('negative').value.trim(),
@@ -465,6 +584,8 @@ $('genForm').addEventListener('submit', async (event) => {
     width: Number($('width').value),
     height: Number($('height').value)
   };
+  if (generateMode === 'image') payload.frames = 1;
+  else if (payload.frames < 2) payload.frames = 9;
   genBtn.disabled = true;
   genBtn.textContent = 'Starting…';
   try {

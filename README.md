@@ -106,6 +106,39 @@ Backend dipilih otomatis sebagai CPU. Tidak ada flag CUDA/Vulkan karena host tid
 
 Untuk video, server meminta `.avi` ke `sd-cli`, lalu setelah container selesai menjalankan `ffmpeg` untuk menghasilkan `.mp4` H.264/yuv420p yang bisa diputar browser. AVI asli dihapus kecuali `KEEP_AVI=1`. Jika `ffmpeg` tidak tersedia, AVI tetap disimpan dan UI menampilkan warning.
 
+## Mode generate: Gambar / Video
+
+UI menyediakan toggle **Gambar** / **Video** di bagian atas form. Default adalah **Gambar**.
+
+- **Gambar**: `frames` dikunci ke `1`, selector durasi disembunyikan, dan tombol berubah menjadi **Generate Gambar**. Preset kualitas tetap dipakai untuk mengisi `steps`, `cfg`, `width`, dan `height`.
+- **Video**: selector durasi aktif, minimal `frames` menjadi `2`, dan tombol berubah menjadi **Generate Video**. Jika `frames` masih `1` saat berpindah ke mode video, nilai diisi `9` sebagai default cepat.
+
+Toggle ini hanya mengubah UI dan payload yang dikirim; backend tetap menentukan gambar/video dari nilai `frames`.
+
+## Preset durasi dan kualitas video
+
+Saat mode **Video** aktif, UI menyediakan dua selector, **Durasi video** dan **Kualitas**. **Durasi** mengisi `frames`; **Kualitas** mengisi `steps`, `cfg`, `width`, dan `height`. Nilai tetap bisa diedit manual setelah preset dipilih. Preset **Kualitas** juga bisa dipakai di mode **Gambar** untuk mengisi `steps`/resolusi tanpa mengubah `frames=1`.
+
+Presets berasal dari server lewat `GET /api/presets`, sehingga daftar dan batas frame selalu sinkron dengan backend.
+
+Wan berjalan pada 16 fps dengan alignment `4n+1`, maka durasi dibulatkan ke frame terdekat:
+
+| Durasi | Frame | Durasi aktual |
+| --- | --- | --- |
+| 10 detik | 161 | ≈10.063 detik |
+| 15 detik | 241 | ≈15.063 detik |
+| 25 detik | 401 | ≈25.063 detik |
+| 30 detik | 481 | ≈30.063 detik |
+| 60 detik | 961 | ≈60.063 detik |
+
+| Kualitas | Steps | Resolusi | CFG | Catatan |
+| --- | --- | --- | --- | --- |
+| Low | 4 | 320x256 | 6 | Coba cepat, cocok untuk pengujian |
+| Medium | 10 | 512x320 | 6 | Seimbang; 29 frame/20 step saat ini memakan ±100 detik per step di host 2 core |
+| High | 20 | 640x400 | 6 | Lebih rapi, jauh lebih lama dan lebih boros RAM |
+
+Sampler tetap `euler` dan negative prompt tidak ditimpa preset. Pilihan 25 detik ke atas menampilkan peringatan dan konfirmasi karena berisiko sangat lama pada CPU 2 core/RAM 7.8GiB. Batas frame server dinaikkan menjadi `961`, tetapi tidak ada jaminan performa untuk 60 detik pada host tanpa GPU.
+
 ## Generate gambar (`frames=1`)
 
 Aplikasi tetap memakai mode Wan `-M vid_gen`, tetapi **`frames=1` menghasilkan satu file PNG**. Tidak ada AVI maupun ffmpeg untuk mode ini; hasil langsung muncul di filter **Gambar** dengan nama `wan-<timestamp>-<n>.png`.
@@ -126,11 +159,12 @@ Aplikasi tetap memakai mode Wan `-M vid_gen`, tetapi **`frames=1` menghasilkan s
 
 ### Langkah di UI
 
-1. Isi **Prompt**.
-2. Set **Frames = 1** dan **Steps = 10** (atau `4` untuk coba cepat).
-3. Buka **Pengaturan lanjutan**, atur **CFG = 6** dan **Negative prompt** bila perlu.
-4. Klik **Generate**. Progres tetap muncul lewat SSE seperti mode video.
-5. File PNG muncul di gallery pada filter **Gambar**.
+1. Pastikan toggle berada di **Gambar**; `frames` otomatis terkunci ke `1`.
+2. Isi **Prompt**.
+3. Pilih **Kualitas** (`Low` untuk cepat, `Medium` untuk seimbang).
+4. Buka **Pengaturan lanjutan**, atur **Negative prompt** bila perlu.
+5. Klik **Generate Gambar**. Progres tetap muncul lewat SSE seperti mode video.
+6. File PNG muncul di gallery pada filter **Gambar**.
 
 ### Contoh via API
 
@@ -164,6 +198,7 @@ curl -X POST http://127.0.0.1:3001/api/generate \
 | `GET` | `/api/health` | Health check ringan, tidak terkena auth |
 | `GET` | `/api/status` | Job terakhir + daftar file |
 | `GET` | `/api/files` | Daftar file hasil |
+| `GET` | `/api/presets` | Daftar preset durasi/kualitas video |
 | `GET` | `/api/stream` | SSE realtime |
 | `POST` | `/api/generate` | Memulai inference |
 | `GET` | `/out/<nama>` | Mengirim PNG/MP4/WebM/AVI, support Range |

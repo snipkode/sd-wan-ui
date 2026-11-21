@@ -15,6 +15,25 @@ const STATE_FILE = path.join(__dirname, 'state.json');
 fs.mkdirSync(OUT_DIR, { recursive: true });
 const HTML = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
 const BOOT = Date.now();
+const VIDEO_FPS = 16;
+
+function framesForDuration(seconds) {
+  const target = Math.round(seconds * VIDEO_FPS);
+  return Math.max(1, 1 + Math.round((target - 1) / 4) * 4);
+}
+
+const QUALITY_PRESETS = {
+  low: { label: 'Low', steps: 4, width: 320, height: 256, cfg: 6 },
+  medium: { label: 'Medium', steps: 10, width: 512, height: 320, cfg: 6 },
+  high: { label: 'High', steps: 20, width: 640, height: 400, cfg: 6 }
+};
+
+const DURATION_PRESETS = [10, 15, 25, 30, 60].map((seconds) => {
+  const frames = framesForDuration(seconds);
+  return { seconds, frames, actualSeconds: Number((frames / VIDEO_FPS).toFixed(3)) };
+});
+
+const MAX_FRAMES = Math.max(...DURATION_PRESETS.map((d) => d.frames));
 
 const SEC_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
@@ -374,7 +393,7 @@ async function handleGenerate(req, res) {
 
   const prompt = String(body.prompt || 'a lovely cat walking in neon rain, cinematic').trim().slice(0, 500) || 'a lovely cat';
   const negative = String(body.negative || 'blurry, low quality, watermark, text').trim().slice(0, 500);
-  const frames = clampInt(body.frames, 1, 81, 1);
+  const frames = clampInt(body.frames, 1, MAX_FRAMES, 1);
   const steps = clampInt(body.steps, 1, 50, 10);
   const width = clampInt(body.width, 256, 1024, 512);
   const height = clampInt(body.height, 256, 1024, 320);
@@ -500,6 +519,12 @@ const server = http.createServer(async (req, res) => {
   if (p === '/' || p === '/index.html') return send(res, 200, HTML, 'text/html; charset=utf-8');
   if (p === '/api/status') return send(res, 200, { job: publicJob(), files: listFiles() });
   if (p === '/api/files') return send(res, 200, { files: listFiles() });
+  if (p === '/api/presets') return send(res, 200, {
+    fps: VIDEO_FPS,
+    maxFrames: MAX_FRAMES,
+    durations: DURATION_PRESETS,
+    qualities: QUALITY_PRESETS
+  });
   if (p === '/api/stream') return handleStream(req, res);
   if (p === '/api/generate') {
     if (req.method !== 'POST') return send(res, 405, { error: 'method not allowed' });
