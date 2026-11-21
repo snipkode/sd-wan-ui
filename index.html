@@ -349,10 +349,14 @@ button {
 .page-btn:disabled { opacity: .4; cursor: not-allowed; }
 #pageInfo { min-width: 56px; color: var(--muted); font-size: 10px; text-align: center; }
 .lightbox {
-  position: relative;
+  position: fixed;
+  inset: 0;
   width: min(calc(100vw - 24px), 960px);
   max-width: none;
   max-height: calc(100vh - 24px);
+  max-height: calc(100dvh - 24px);
+  margin: auto;
+  overflow: hidden;
   padding: 12px;
   color: var(--text);
   background: rgba(10, 10, 12, .96);
@@ -361,8 +365,25 @@ button {
   box-shadow: 0 24px 80px rgba(0, 0, 0, .7);
 }
 .lightbox::backdrop { background: rgba(0, 0, 0, .78); backdrop-filter: blur(6px); }
-.lightbox-media { display: flex; align-items: center; justify-content: center; min-height: 180px; }
-.lightbox-media img, .lightbox-media video { display: block; max-width: 100%; max-height: min(62vh, calc(100vh - 260px)); width: auto; height: auto; border-radius: 10px; }
+.lightbox-media {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: min(62vh, calc(100vh - 260px));
+  height: min(62dvh, calc(100dvh - 260px));
+  min-height: 0;
+  overflow: hidden;
+}
+.lightbox-media img, .lightbox-media video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  object-position: center;
+  border-radius: 10px;
+}
 .lightbox-close, .lightbox-nav {
   position: absolute;
   display: inline-flex;
@@ -419,6 +440,12 @@ button {
   .guide-modal p, .guide-modal li { font-size: 10px; line-height: 1.45; }
   .guide-modal li { margin-bottom: 3px; }
   .guide-modal .lightbox-close { top: 6px; right: 6px; width: 28px; height: 28px; }
+  .lightbox { width: calc(100vw - 16px); max-height: calc(100dvh - 16px); padding: 10px; border-radius: 12px; }
+  .lightbox-media { height: min(52vh, calc(100vh - 190px)); height: min(52dvh, calc(100dvh - 190px)); }
+  .lightbox-nav { width: 30px; height: 30px; }
+  .lightbox-nav.prev { left: 4px; }
+  .lightbox-nav.next { right: 4px; }
+  .lightbox-details { max-height: 24vh; max-height: 24dvh; }
 }
 @media (max-width: 360px) {
   main { padding-left: 10px; padding-right: 10px; }
