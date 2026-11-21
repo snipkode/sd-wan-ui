@@ -384,8 +384,41 @@ button {
   object-position: center;
   border-radius: 10px;
 }
+.lightbox-media img { touch-action: none; }
+.lightbox-media img.zoomed { cursor: grab; }
+.lightbox-media img.dragging { cursor: grabbing; }
+.lightbox-stage { position: relative; }
+.lightbox-zoom {
+  position: absolute;
+  left: 50%;
+  bottom: 8px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  background: rgba(10, 10, 12, .86);
+  border: 1px solid var(--stroke);
+  border-radius: 999px;
+  transform: translateX(-50%);
+}
+.lightbox-zoom[hidden] { display: none; }
+.lightbox-zoom button {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  color: var(--text);
+  background: rgba(255, 255, 255, .1);
+  border: 1px solid var(--stroke);
+  border-radius: 50%;
+  font-size: 15px;
+  font-weight: 700;
+}
+.lightbox-zoom button:disabled { opacity: .35; cursor: not-allowed; }
+#zoomLevel { min-width: 38px; color: var(--muted); font-size: 10px; text-align: center; }
 .lightbox-close, .lightbox-nav {
   position: absolute;
+  z-index: 3;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -445,6 +478,8 @@ button {
   .lightbox-nav { width: 30px; height: 30px; }
   .lightbox-nav.prev { left: 4px; }
   .lightbox-nav.next { right: 4px; }
+  .lightbox-zoom { bottom: 4px; gap: 4px; padding: 3px 5px; }
+  .lightbox-zoom button { width: 24px; height: 24px; font-size: 14px; }
   .lightbox-details { max-height: 24vh; max-height: 24dvh; }
 }
 @media (max-width: 360px) {
@@ -642,9 +677,16 @@ button {
 </dialog>
 <dialog id="lightbox" class="lightbox">
   <button id="lightboxClose" class="lightbox-close" type="button" aria-label="Tutup">×</button>
-  <button id="lightboxPrev" class="lightbox-nav prev" type="button" aria-label="Sebelumnya">‹</button>
-  <div id="lightboxMedia" class="lightbox-media"></div>
-  <button id="lightboxNext" class="lightbox-nav next" type="button" aria-label="Berikutnya">›</button>
+  <div class="lightbox-stage">
+    <button id="lightboxPrev" class="lightbox-nav prev" type="button" aria-label="Sebelumnya">‹</button>
+    <div id="lightboxMedia" class="lightbox-media"></div>
+    <button id="lightboxNext" class="lightbox-nav next" type="button" aria-label="Berikutnya">›</button>
+    <div id="zoomControls" class="lightbox-zoom" role="group" aria-label="Zoom gambar" hidden>
+      <button id="zoomOut" type="button" aria-label="Perkecil">−</button>
+      <span id="zoomLevel">100%</span>
+      <button id="zoomIn" type="button" aria-label="Perbesar">+</button>
+    </div>
+  </div>
   <p id="lightboxCaption" class="lightbox-caption"></p>
   <div id="lightboxDetails" class="lightbox-details"></div>
 </dialog>
@@ -689,6 +731,10 @@ const lightboxDetails = $('lightboxDetails');
 const lightboxClose = $('lightboxClose');
 const lightboxPrev = $('lightboxPrev');
 const lightboxNext = $('lightboxNext');
+const zoomControls = $('zoomControls');
+const zoomIn = $('zoomIn');
+const zoomOut = $('zoomOut');
+const zoomLevel = $('zoomLevel');
 const guideModal = $('guideModal');
 const guideBtn = $('guideBtn');
 const guideClose = $('guideClose');
@@ -705,6 +751,9 @@ let currentPage = 1;
 let galleryLoading = false;
 let galleryPending = false;
 let lightboxIndex = -1;
+let lightboxZoomIndex = 0;
+let lightboxPan = { x: 0, y: 0 };
+let lightboxDrag = null;
 let currentJob = null;
 let logReady = false;
 let pipelineDetail = '';
@@ -716,6 +765,7 @@ const SIZE_OPTIONS = [
   { key: 'high', label: 'Besar', width: 640, height: 400 },
   { key: 'large', label: 'Lebih besar', width: 768, height: 512 }
 ];
+const ZOOM_STEPS = [1, 1.25, 1.5, 2, 3, 4];
 const PIPELINE = [
   { id: 'input', title: 'Input & config', model: 'form → server', short: 'Prompt, steps, dan ukuran.', detail: 'Prompt, negative prompt, jumlah frame, steps, CFG, dan resolusi dikirim dari browser ke server.' },
   { id: 'text', title: 'Text encoder', model: 'umt5-xxl-encoder-Q3_K_S.gguf', short: 'Teks jadi conditioning.', detail: 'Prompt diubah model UMT5-XXL menjadi vektor kondisi supaya model gambar paham permintaan user.' },
@@ -1090,8 +1140,80 @@ function renderDetails(meta) {
   lightboxDetails.appendChild(dl);
 }
 
+function lightboxImage() {
+  return lightboxMedia.querySelector('img');
+}
+
+function clampLightboxPan(img) {
+  const zoom = ZOOM_STEPS[lightboxZoomIndex];
+  if (zoom <= 1) {
+    lightboxPan = { x: 0, y: 0 };
+    return;
+  }
+  const box = lightboxMedia.getBoundingClientRect();
+  const naturalWidth = img.naturalWidth || box.width;
+  const naturalHeight = img.naturalHeight || box.height;
+  if (!naturalWidth || !naturalHeight) return;
+  const fit = Math.min(box.width / naturalWidth, box.height / naturalHeight);
+  const maxX = Math.max(0, (naturalWidth * fit * zoom - box.width) / 2);
+  const maxY = Math.max(0, (naturalHeight * fit * zoom - box.height) / 2);
+  lightboxPan.x = Math.max(-maxX, Math.min(maxX, lightboxPan.x));
+  lightboxPan.y = Math.max(-maxY, Math.min(maxY, lightboxPan.y));
+}
+
+function applyLightboxZoom() {
+  const img = lightboxImage();
+  const zoom = ZOOM_STEPS[lightboxZoomIndex];
+  zoomControls.hidden = !img;
+  zoomLevel.textContent = `${Math.round(zoom * 100)}%`;
+  zoomOut.disabled = lightboxZoomIndex === 0;
+  zoomIn.disabled = lightboxZoomIndex === ZOOM_STEPS.length - 1;
+  if (!img) return;
+  clampLightboxPan(img);
+  img.style.transform = `translate(${lightboxPan.x}px, ${lightboxPan.y}px) scale(${zoom})`;
+  img.classList.toggle('zoomed', zoom > 1);
+}
+
+function setLightboxZoom(index) {
+  const next = Math.max(0, Math.min(ZOOM_STEPS.length - 1, index));
+  if (next === lightboxZoomIndex) return;
+  lightboxZoomIndex = next;
+  if (lightboxZoomIndex === 0) lightboxPan = { x: 0, y: 0 };
+  applyLightboxZoom();
+}
+
+function resetLightboxZoom() {
+  lightboxZoomIndex = 0;
+  lightboxPan = { x: 0, y: 0 };
+  lightboxDrag = null;
+  applyLightboxZoom();
+}
+
+function bindLightboxDrag(img) {
+  img.addEventListener('pointerdown', (event) => {
+    if (ZOOM_STEPS[lightboxZoomIndex] <= 1) return;
+    lightboxDrag = { id: event.pointerId, x: event.clientX - lightboxPan.x, y: event.clientY - lightboxPan.y };
+    img.setPointerCapture(event.pointerId);
+    img.classList.add('dragging');
+  });
+  img.addEventListener('pointermove', (event) => {
+    if (!lightboxDrag || lightboxDrag.id !== event.pointerId) return;
+    lightboxPan.x = event.clientX - lightboxDrag.x;
+    lightboxPan.y = event.clientY - lightboxDrag.y;
+    applyLightboxZoom();
+  });
+  const stop = (event) => {
+    if (!lightboxDrag || lightboxDrag.id !== event.pointerId) return;
+    lightboxDrag = null;
+    img.classList.remove('dragging');
+  };
+  img.addEventListener('pointerup', stop);
+  img.addEventListener('pointercancel', stop);
+}
+
 function renderLightbox() {
   const f = galleryFiles[lightboxIndex];
+  resetLightboxZoom();
   lightboxMedia.textContent = '';
   lightboxPrev.disabled = lightboxIndex <= 0;
   lightboxNext.disabled = lightboxIndex >= galleryFiles.length - 1;
@@ -1110,10 +1232,13 @@ function renderLightbox() {
     lightboxMedia.appendChild(video);
   } else {
     const img = document.createElement('img');
-    img.src = src;
     img.alt = f.name;
+    img.addEventListener('load', applyLightboxZoom);
+    bindLightboxDrag(img);
+    img.src = src;
     lightboxMedia.appendChild(img);
   }
+  applyLightboxZoom();
   lightboxCaption.textContent = `${f.name} · ${fmt(f.size)}`;
   renderDetails(f.meta);
 }
@@ -1363,10 +1488,13 @@ guideModal.addEventListener('click', (event) => {
 });
 lightboxPrev.addEventListener('click', () => showLightbox(lightboxIndex - 1));
 lightboxNext.addEventListener('click', () => showLightbox(lightboxIndex + 1));
+zoomIn.addEventListener('click', () => setLightboxZoom(lightboxZoomIndex + 1));
+zoomOut.addEventListener('click', () => setLightboxZoom(lightboxZoomIndex - 1));
 lightbox.addEventListener('close', () => {
   lightboxMedia.textContent = '';
   lightboxCaption.textContent = '';
   lightboxDetails.textContent = '';
+  resetLightboxZoom();
 });
 lightbox.addEventListener('keydown', (event) => {
   if (event.key === 'ArrowLeft') {
