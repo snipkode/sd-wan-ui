@@ -21,6 +21,7 @@ const HTML = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
 const BOOT = Date.now();
 const VIDEO_FPS = 16;
 const OOM_ERROR = 'docker exit 137: OOM/killed, turunkan frame/resolusi/step atau tambah RAM/swap';
+const ACTIVE_JOB_STATUSES = ['starting', 'running', 'decoding', 'encoding', 'stopping'];
 
 function framesForDuration(seconds) {
   const target = Math.round(seconds * VIDEO_FPS);
@@ -162,7 +163,8 @@ function publicJob() {
     prompt: job.prompt,
     frames: job.frames,
     error: job.error,
-    warning: job.warning
+    warning: job.warning,
+    cancelled: Boolean(job.cancelled)
   };
 }
 
@@ -175,9 +177,15 @@ function loadState() {
       j.logs = Array.isArray(j.logs) ? j.logs : [];
       j.progress = j.progress || { current: 0, total: 0, percent: 0 };
       j.warning = j.warning || null;
-      if (['starting', 'running', 'decoding', 'encoding'].includes(j.status)) {
-        j.status = 'error';
-        j.error = 'server restarted while job was running';
+      if (ACTIVE_JOB_STATUSES.includes(j.status)) {
+        if (j.cancelled) {
+          j.status = 'stopped';
+          j.warning = j.warning || 'dihentikan oleh user';
+          j.error = null;
+        } else {
+          j.status = 'error';
+          j.error = 'server restarted while job was running';
+        }
         j.finishedAt = j.finishedAt || now();
       }
       if (j.exitCode === 137 && String(j.error || '').startsWith('docker exit 137')) j.error = OOM_ERROR;
@@ -332,6 +340,7 @@ function startJob(config) {
     frames: config.frames,
     error: null,
     warning: null,
+    cancelled: false,
     proc: null,
     container
   };
@@ -372,6 +381,7 @@ function startJob(config) {
   proc.stderr.on('data', (d) => handleOutput(job, d));
 
   proc.on('error', (err) => {
+    if (job && job.cancelled) return;
     job.error = String(err.message || err);
     job.status = 'error';
     job.finishedAt = now();
@@ -384,31 +394,72 @@ function startJob(config) {
     if (!job || job.id !== id) return;
     job.exitCode = code;
     job.finishedAt = now();
-    if (code !== 0 && !job.error) {
-      job.error = code === 137 ? OOM_ERROR : `docker exit ${code}`;
-      if (code === 137) broadcast('log', { jobId: job.id, line: job.error, progress: job.progress });
-    }
-
-    if (code === 0 && config.frames > 1) {
-      job.status = 'encoding';
-      broadcast('status', { job: publicJob() });
-      const nativeName = path.basename(job.output || outputName);
-      const ok = await transcodeToMp4(nativeName, finalName);
-      if (ok) {
-        job.output = finalName;
-        broadcast('log', { jobId: job.id, line: `video converted to ${finalName}`, progress: job.progress });
-      } else {
-        job.warning = `ffmpeg gagal; video AVI asli tetap ${nativeName}`;
-        broadcast('log', { jobId: job.id, line: job.warning, progress: job.progress });
+    if (job.cancelled) {
+      job.status = 'stopped';
+      job.error = null;
+      job.warning = 'dihentikan oleh user · tidak ada output akhir';
+      const line = `job ${id} dihentikan · docker exit ${code}`;
+      job.logs.push(line);
+      if (job.logs.length > 400) job.logs.shift();
+      broadcast('log', { jobId: id, line, progress: job.progress });
+    } else {
+      if (code !== 0 && !job.error) {
+        job.error = code === 137 ? OOM_ERROR : `docker exit ${code}`;
+        if (code === 137) broadcast('log', { jobId: job.id, line: job.error, progress: job.progress });
       }
-    }
 
-    job.status = code === 0 ? 'done' : 'error';
+      if (code === 0 && config.frames > 1) {
+        job.status = 'encoding';
+        broadcast('status', { job: publicJob() });
+        const nativeName = path.basename(job.output || outputName);
+        const ok = await transcodeToMp4(nativeName, finalName);
+        if (ok) {
+          job.output = finalName;
+          broadcast('log', { jobId: job.id, line: `video converted to ${finalName}`, progress: job.progress });
+        } else {
+          job.warning = `ffmpeg gagal; video AVI asli tetap ${nativeName}`;
+          broadcast('log', { jobId: job.id, line: job.warning, progress: job.progress });
+        }
+      }
+
+      job.status = code === 0 ? 'done' : 'error';
+    }
     knownFiles = new Set(listFiles().map((f) => f.name));
     broadcast('status', { job: publicJob() });
     broadcast('files', { files: listFiles() });
     saveState();
   });
+
+  return publicJob();
+}
+
+function cancelJob() {
+  if (!job || !ACTIVE_JOB_STATUSES.includes(job.status)) return null;
+  if (job.cancelled) return publicJob();
+
+  const active = job;
+  active.cancelled = true;
+  active.status = 'stopping';
+  active.error = null;
+  active.warning = 'menghentikan job…';
+  const line = `stop requested · ${active.id}`;
+  active.logs.push(line);
+  if (active.logs.length > 400) active.logs.shift();
+  broadcast('status', { job: publicJob() });
+  broadcast('log', { jobId: active.id, line, progress: active.progress });
+  saveState();
+
+  if (active.container) {
+    const stop = spawn('docker', ['stop', '--time', '3', active.container], { stdio: 'ignore' });
+    stop.on('error', () => {
+      if (active.proc && active.proc.exitCode === null) active.proc.kill('SIGTERM');
+    });
+    stop.on('close', (code) => {
+      if (code !== 0 && active.proc && active.proc.exitCode === null) active.proc.kill('SIGTERM');
+    });
+  } else if (active.proc && active.proc.exitCode === null) {
+    active.proc.kill('SIGTERM');
+  }
 
   return publicJob();
 }
@@ -423,7 +474,7 @@ async function handleGenerate(req, res) {
     return send(res, 400, { error: `invalid JSON: ${err.message}` });
   }
 
-  if (job && ['starting', 'running', 'decoding', 'encoding'].includes(job.status)) {
+  if (job && ACTIVE_JOB_STATUSES.includes(job.status)) {
     return send(res, 409, { error: 'inference masih berjalan', job: publicJob() });
   }
 
@@ -572,6 +623,12 @@ const server = http.createServer(async (req, res) => {
     if (req.method !== 'POST') return send(res, 405, { error: 'method not allowed' });
     return handleGenerate(req, res);
   }
+  if (p === '/api/cancel') {
+    if (req.method !== 'POST') return send(res, 405, { error: 'method not allowed' });
+    const stopped = cancelJob();
+    if (!stopped) return send(res, 409, { error: 'tidak ada job aktif' });
+    return send(res, 200, { job: stopped });
+  }
   if (p.startsWith('/out/')) return handleOut(req, res, p);
   return send(res, 404, { error: 'not found' });
 });
@@ -581,7 +638,7 @@ server.listen(PORT, HOST, () => {
 });
 
 function shutdown() {
-  if (job && job.proc && ['starting', 'running', 'decoding', 'encoding'].includes(job.status)) {
+  if (job && job.proc && ACTIVE_JOB_STATUSES.includes(job.status)) {
     spawn('docker', ['stop', job.container], { stdio: 'ignore' });
   }
   server.close(() => process.exit(0));

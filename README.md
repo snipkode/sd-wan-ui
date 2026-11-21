@@ -213,6 +213,12 @@ UI menyediakan toggle **Gambar** / **Video** di bagian atas form. Default adalah
 
 Toggle ini hanya mengubah UI dan payload yang dikirim; backend tetap menentukan gambar/video dari nilai `frames`.
 
+## Menghentikan job
+
+Saat ada inference aktif, tombol **Stop** muncul di sebelah status job. Tombol ini memanggil `POST /api/cancel`, menghentikan container Docker terkait, lalu menandai job sebagai `stopped`.
+
+Job yang dihentikan tidak menjalankan transcode dan tidak menyimpan output akhir. File yang sudah ditulis sebelum stop tetap muncul di galeri. Lewat SSE, perubahan status langsung terkirim ke UI tanpa refresh.
+
 ## Preset durasi dan kualitas video
 
 Saat mode **Video** aktif, UI menyediakan dua selector, **Durasi video** dan **Kualitas**. **Durasi** mengisi `frames`; **Kualitas** mengisi `steps`, `cfg`, `width`, dan `height`. Nilai tetap bisa diedit manual setelah preset dipilih. Preset **Kualitas** juga bisa dipakai di mode **Gambar** untuk mengisi `steps`/resolusi tanpa mengubah `frames=1`.

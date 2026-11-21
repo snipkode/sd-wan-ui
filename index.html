@@ -170,6 +170,19 @@ button {
 .badge.ok { background: rgba(48, 209, 88, .16); color: var(--green); }
 .badge.bad { background: rgba(255, 69, 58, .16); color: var(--red); }
 .badge.busy { background: rgba(10, 132, 255, .18); color: var(--cyan); }
+.badge.stopped { background: rgba(255, 159, 10, .16); color: #ff9f0a; }
+.stop {
+  flex: none;
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  color: var(--red);
+  background: rgba(255, 69, 58, .12);
+  border: 1px solid rgba(255, 69, 58, .35);
+  font-size: 10px;
+  font-weight: 700;
+}
+.stop:disabled { opacity: .5; cursor: not-allowed; }
 #jobMeta { min-width: 0; color: var(--muted); font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .track { height: 4px; margin-top: 8px; border-radius: 999px; background: rgba(255, 255, 255, .1); overflow: hidden; }
 #barFill { width: 0; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--blue), var(--cyan)); transition: width .25s ease; }
@@ -336,6 +349,7 @@ button {
     <div class="status">
       <span id="jobStatus" class="badge">idle</span>
       <span id="jobMeta">siap</span>
+      <button id="stopBtn" class="stop" type="button" hidden>Stop</button>
     </div>
     <div class="track"><div id="barFill"></div></div>
     <pre id="log" class="log">Menunggu event...</pre>
@@ -365,6 +379,7 @@ const empty = $('empty');
 const jobStatus = $('jobStatus');
 const jobMeta = $('jobMeta');
 const genBtn = $('genBtn');
+const stopBtn = $('stopBtn');
 const barFill = $('barFill');
 const fileCount = $('fileCount');
 const clock = $('clock');
@@ -381,6 +396,7 @@ let allFiles = [];
 let activeFilter = 'all';
 let currentJob = null;
 let logReady = false;
+const ACTIVE_STATUSES = ['starting', 'running', 'decoding', 'encoding', 'stopping'];
 
 if (window.innerWidth < 700) $('advanced').open = false;
 
@@ -484,7 +500,7 @@ function setMode(mode) {
 function renderProgress(progress) {
   const pct = Math.max(0, Math.min(100, Number(progress && progress.percent) || 0));
   barFill.style.width = `${pct}%`;
-  if (currentJob && ['starting', 'running', 'decoding', 'encoding'].includes(currentJob.status)) {
+  if (currentJob && ACTIVE_STATUSES.includes(currentJob.status) && currentJob.status !== 'stopping') {
     jobMeta.textContent = `${currentJob.frames} frame · ${pct}% · ${progress.current || 0}/${progress.total || currentJob.progress.total || 0}`;
   }
 }
@@ -499,18 +515,24 @@ function renderJob(job) {
     renderProgress({ percent: 0 });
     genBtn.disabled = false;
     genBtn.textContent = genLabel;
+    stopBtn.hidden = true;
     return;
   }
-  const busy = ['starting', 'running', 'decoding', 'encoding'].includes(job.status);
+  const busy = ACTIVE_STATUSES.includes(job.status);
+  const tone = job.status === 'done' ? 'ok' : job.status === 'error' ? 'bad' : job.status === 'stopped' ? 'stopped' : 'busy';
   jobStatus.textContent = job.status;
-  jobStatus.className = `badge ${job.status === 'done' ? 'ok' : job.status === 'error' ? 'bad' : 'busy'}`;
+  jobStatus.className = `badge ${tone}`;
   if (job.error) jobMeta.textContent = job.error.slice(0, 110);
   else if (job.warning) jobMeta.textContent = job.warning.slice(0, 110);
   else if (job.status === 'done') jobMeta.textContent = job.output ? `selesai · ${job.output}` : 'selesai';
+  else if (job.status === 'stopped') jobMeta.textContent = 'dihentikan · tanpa output akhir';
   else jobMeta.textContent = `${job.frames} frame · ${job.progress.percent || 0}%`;
   renderProgress(job.progress || { percent: 0 });
   genBtn.disabled = busy;
   genBtn.textContent = busy ? 'Generating…' : genLabel;
+  stopBtn.hidden = !busy;
+  stopBtn.disabled = job.status === 'stopping';
+  stopBtn.textContent = job.status === 'stopping' ? 'Stopping…' : 'Stop';
 }
 
 function applyFilter() {
@@ -616,6 +638,24 @@ $('genForm').addEventListener('submit', async (event) => {
     logReady = false;
     pushLog(`job ${data.job.id} dimulai · ${data.job.output}`);
     renderJob(data.job);
+  } catch (err) {
+    pushLog(`ERROR: ${err.message}`);
+    alert(err.message);
+    renderJob(currentJob);
+  }
+});
+
+stopBtn.addEventListener('click', async () => {
+  if (!currentJob || !ACTIVE_STATUSES.includes(currentJob.status) || currentJob.status === 'stopping') return;
+  if (!confirm(`Hentikan job ${currentJob.id}? Proses yang sudah berjalan akan dihentikan tanpa output akhir.`)) return;
+  stopBtn.disabled = true;
+  stopBtn.textContent = 'Stopping…';
+  try {
+    const response = await fetch('/api/cancel', { method: 'POST' });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'gagal menghentikan job');
+    renderJob(data.job);
+    pushLog(`stop requested · ${data.job.id}`);
   } catch (err) {
     pushLog(`ERROR: ${err.message}`);
     alert(err.message);
