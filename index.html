@@ -238,11 +238,14 @@ button {
 .guide-trigger { margin-top: 10px; }
 .guide-btn { min-height: 30px; padding: 0 12px; border: 1px solid var(--stroke); border-radius: 999px; color: var(--text); background: rgba(255, 255, 255, .08); font-size: 11px; font-weight: 650; cursor: pointer; }
 .guide-btn:hover { background: rgba(255, 255, 255, .14); }
-.guide-modal { position: relative; width: min(calc(100vw - 24px), 620px); max-height: calc(100vh - 24px); overflow: auto; padding: 18px; color: var(--text); background: rgba(10, 10, 12, .97); border: 1px solid var(--stroke); border-radius: 16px; box-shadow: 0 24px 80px rgba(0, 0, 0, .7); }
+.guide-modal { position: fixed; inset: 0; width: min(calc(100vw - 24px), 620px); max-height: min(82vh, 560px); margin: auto; overflow: auto; padding: 18px; color: var(--text); background: rgba(10, 10, 12, .97); border: 1px solid var(--stroke); border-radius: 16px; box-shadow: 0 24px 80px rgba(0, 0, 0, .7); }
 .guide-modal::backdrop { background: rgba(0, 0, 0, .78); backdrop-filter: blur(6px); }
 .guide-modal h2 { margin: 0 36px 12px 0; font-size: 18px; }
 .guide-modal h3 { margin: 16px 0 6px; color: var(--cyan); font-size: 12px; }
-.guide-modal p { margin: 0 0 8px; color: var(--muted); font-size: 11px; line-height: 1.6; }
+.guide-modal p, .guide-modal li { color: var(--muted); font-size: 11px; line-height: 1.6; }
+.guide-modal p { margin: 0 0 8px; }
+.guide-modal ol { margin: 0; padding-left: 18px; }
+.guide-modal li { margin-bottom: 4px; }
 .guide-modal code { color: var(--text); }
 .tip { display: inline-grid; place-items: center; width: 13px; height: 13px; margin-left: 4px; border: 1px solid var(--stroke); border-radius: 50%; color: var(--muted); font-size: 9px; font-weight: 800; cursor: help; vertical-align: middle; }
 .log {
@@ -407,6 +410,12 @@ button {
   .card img, .card video { height: 110px; }
   .meta { padding: 7px; }
   .log { max-height: 120px; font-size: 10px; }
+  .guide-modal { width: calc(100vw - 20px); max-height: 76vh; padding: 14px; border-radius: 14px; }
+  .guide-modal h2 { margin-bottom: 8px; font-size: 16px; }
+  .guide-modal h3 { margin: 10px 0 4px; font-size: 11px; }
+  .guide-modal p, .guide-modal li { font-size: 10px; line-height: 1.45; }
+  .guide-modal li { margin-bottom: 3px; }
+  .guide-modal .lightbox-close { top: 6px; right: 6px; width: 28px; height: 28px; }
 }
 @media (max-width: 360px) {
   main { padding-left: 10px; padding-right: 10px; }
