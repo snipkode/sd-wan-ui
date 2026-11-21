@@ -1,0 +1,38 @@
+FROM ubuntu:26.04
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl ffmpeg libgomp1 nodejs unzip \
+    && rm -rf /var/lib/apt/lists/*
+
+ARG SD_ZIP_URL=https://github.com/leejet/stable-diffusion.cpp/releases/download/master-1106-532d2c1/sd-master-532d2c1-bin-Linux-Ubuntu-26.04-x86_64.zip
+
+ADD ${SD_ZIP_URL} /tmp/sd.zip
+RUN mkdir -p /sd.cpp/bin \
+    && unzip -o /tmp/sd.zip -d /sd.cpp/bin \
+    && rm /tmp/sd.zip \
+    && chmod +x /sd.cpp/bin/*
+
+WORKDIR /app
+
+COPY server.js index.html ./
+COPY scripts ./scripts
+
+ENV HOST=0.0.0.0 \
+    PORT=3001 \
+    MODEL_DIR=/models \
+    OUT_DIR=/output \
+    STATE_FILE=/app/runtime/state.json \
+    SD_RUNNER=local \
+    SD_CLI_BIN=/sd.cpp/bin/sd-cli \
+    SD_BACKEND=cpu \
+    FFMPEG_BIN=/usr/bin/ffmpeg \
+    KEEP_AVI=0
+
+RUN mkdir -p /models /output /app/runtime
+
+EXPOSE 3001
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 CMD curl -fsS http://127.0.0.1:3001/api/health || exit 1
+
+ENTRYPOINT ["/app/scripts/entrypoint.sh"]
+CMD ["ui"]

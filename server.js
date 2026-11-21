@@ -11,6 +11,9 @@ const MODEL_DIR = path.resolve(process.env.MODEL_DIR || '/root/models/wan');
 const OUT_HOST_DIR = String(process.env.OUT_HOST_DIR || '').trim() || OUT_DIR;
 const MODEL_HOST_DIR = String(process.env.MODEL_HOST_DIR || '').trim() || MODEL_DIR;
 const IMAGE = process.env.SD_IMAGE || 'sd-cpu:local';
+const RUNNER = String(process.env.SD_RUNNER || 'docker').trim().toLowerCase() === 'local' ? 'local' : 'docker';
+const RUNNER_LABEL = RUNNER === 'local' ? 'sd-cli' : 'docker';
+const SD_CLI_BIN = process.env.SD_CLI_BIN || '/sd.cpp/bin/sd-cli';
 const BACKEND = String(process.env.SD_BACKEND || 'cpu').trim();
 const GPU_DEVICES = String(process.env.GPU_DEVICES || 'all').trim() || 'all';
 const VULKAN_DEVICE = String(process.env.VULKAN_DEVICE || '/dev/dri').trim() || '/dev/dri';
@@ -23,7 +26,9 @@ fs.mkdirSync(path.dirname(STATE_FILE), { recursive: true });
 const HTML = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
 const BOOT = Date.now();
 const VIDEO_FPS = 16;
-const OOM_ERROR = 'docker exit 137: OOM/killed, turunkan frame/resolusi/step atau tambah RAM/swap';
+function oomError() {
+  return `${RUNNER_LABEL} exit 137: OOM/killed, turunkan frame/resolusi/step atau tambah RAM/swap`;
+}
 const ACTIVE_JOB_STATUSES = ['starting', 'running', 'decoding', 'encoding', 'stopping'];
 
 function framesForDuration(seconds) {
@@ -53,6 +58,21 @@ function dockerDeviceArgs() {
   if (value.includes('cuda')) args.push('--gpus', GPU_DEVICES);
   if (value.includes('vulkan')) args.push('--device', VULKAN_DEVICE);
   return args;
+}
+
+function terminateJob(target) {
+  const proc = target && target.proc;
+  if (!proc || proc.exitCode !== null) return;
+  if (RUNNER === 'local' && process.platform !== 'win32' && proc.pid) {
+    try {
+      process.kill(-proc.pid, 'SIGTERM');
+      return;
+    } catch {
+      proc.kill('SIGTERM');
+      return;
+    }
+  }
+  proc.kill('SIGTERM');
 }
 
 const QUALITY_PRESETS = {
@@ -222,7 +242,7 @@ function loadState() {
         }
         j.finishedAt = j.finishedAt || now();
       }
-      if (j.exitCode === 137 && String(j.error || '').startsWith('docker exit 137')) j.error = OOM_ERROR;
+      if (j.exitCode === 137 && /^(docker|sd-cli) exit 137/.test(String(j.error || ''))) j.error = oomError();
       job = j;
     }
   } catch {
@@ -358,7 +378,9 @@ function startJob(config) {
   const baseName = `wan-${Date.now()}-${n}`;
   const outputName = `${baseName}.${config.frames > 1 ? 'avi' : 'png'}`;
   const finalName = config.frames > 1 ? `${baseName}.mp4` : outputName;
-  const outputPath = `/output/${outputName}`;
+  const modelBase = RUNNER === 'local' ? MODEL_DIR : '/models';
+  const outputBase = RUNNER === 'local' ? OUT_DIR : '/output';
+  const outputPath = path.join(outputBase, outputName);
   const container = `sd-ui-${id}`.replace(/[^A-Za-z0-9_.-]/g, '-');
 
   job = {
@@ -380,17 +402,12 @@ function startJob(config) {
   };
   saveState();
 
-  const args = [
-    'run', '--rm', '--name', container,
-    ...dockerDeviceArgs(),
-    '-v', `${MODEL_HOST_DIR}:/models:ro`,
-    '-v', `${OUT_HOST_DIR}:/output`,
-    IMAGE,
+  const sdArgs = [
     ...backendCliArgs(),
     '-M', 'vid_gen',
-    '--diffusion-model', '/models/wan2.1_t2v_1.3b-q4_k_m.gguf',
-    '--taesd', '/models/taew2_1.safetensors',
-    '--t5xxl', '/models/umt5-xxl-encoder-Q3_K_S.gguf',
+    '--diffusion-model', path.join(modelBase, 'wan2.1_t2v_1.3b-q4_k_m.gguf'),
+    '--taesd', path.join(modelBase, 'taew2_1.safetensors'),
+    '--t5xxl', path.join(modelBase, 'umt5-xxl-encoder-Q3_K_S.gguf'),
     '-p', config.prompt,
     '-n', config.negative,
     '--cfg-scale', config.cfg.toFixed(1),
@@ -405,7 +422,16 @@ function startJob(config) {
     ...EXTRA_ARGS
   ];
 
-  const proc = spawn('docker', args, { stdio: ['ignore', 'pipe', 'pipe'] });
+  const proc = RUNNER === 'local'
+    ? spawn(SD_CLI_BIN, sdArgs, { stdio: ['ignore', 'pipe', 'pipe'], detached: process.platform !== 'win32' })
+    : spawn('docker', [
+        'run', '--rm', '--name', container,
+        ...dockerDeviceArgs(),
+        '-v', `${MODEL_HOST_DIR}:/models:ro`,
+        '-v', `${OUT_HOST_DIR}:/output`,
+        IMAGE,
+        ...sdArgs
+      ], { stdio: ['ignore', 'pipe', 'pipe'] });
   job.proc = proc;
   job.status = 'running';
   broadcast('status', { job: publicJob() });
@@ -432,13 +458,13 @@ function startJob(config) {
       job.status = 'stopped';
       job.error = null;
       job.warning = 'dihentikan oleh user · tidak ada output akhir';
-      const line = `job ${id} dihentikan · docker exit ${code}`;
+      const line = `job ${id} dihentikan · ${RUNNER_LABEL} exit ${code}`;
       job.logs.push(line);
       if (job.logs.length > 400) job.logs.shift();
       broadcast('log', { jobId: id, line, progress: job.progress });
     } else {
       if (code !== 0 && !job.error) {
-        job.error = code === 137 ? OOM_ERROR : `docker exit ${code}`;
+        job.error = code === 137 ? oomError() : `${RUNNER_LABEL} exit ${code}`;
         if (code === 137) broadcast('log', { jobId: job.id, line: job.error, progress: job.progress });
       }
 
@@ -483,16 +509,14 @@ function cancelJob() {
   broadcast('log', { jobId: active.id, line, progress: active.progress });
   saveState();
 
-  if (active.container) {
+  if (RUNNER === 'docker' && active.container) {
     const stop = spawn('docker', ['stop', '--time', '3', active.container], { stdio: 'ignore' });
-    stop.on('error', () => {
-      if (active.proc && active.proc.exitCode === null) active.proc.kill('SIGTERM');
-    });
+    stop.on('error', () => terminateJob(active));
     stop.on('close', (code) => {
-      if (code !== 0 && active.proc && active.proc.exitCode === null) active.proc.kill('SIGTERM');
+      if (code !== 0) terminateJob(active);
     });
-  } else if (active.proc && active.proc.exitCode === null) {
-    active.proc.kill('SIGTERM');
+  } else {
+    terminateJob(active);
   }
 
   return publicJob();
@@ -680,7 +704,9 @@ const server = http.createServer(async (req, res) => {
       auth: Boolean(UI_TOKEN),
       job: current ? current.status : null,
       backend: normalizedBackend(),
+      runner: RUNNER,
       image: IMAGE,
+      cli: SD_CLI_BIN,
       dockerDevices: dockerDeviceArgs(),
       backendArgs: backendCliArgs(),
       extraArgs: EXTRA_ARGS,
@@ -723,7 +749,8 @@ server.listen(PORT, HOST, () => {
 
 function shutdown() {
   if (job && job.proc && ACTIVE_JOB_STATUSES.includes(job.status)) {
-    spawn('docker', ['stop', job.container], { stdio: 'ignore' });
+    if (RUNNER === 'docker') spawn('docker', ['stop', job.container], { stdio: 'ignore' });
+    else terminateJob(job);
   }
   server.close(() => process.exit(0));
   setTimeout(() => process.exit(0), 5000).unref();
