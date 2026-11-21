@@ -30,6 +30,7 @@ function oomError() {
   return `${RUNNER_LABEL} exit 137: OOM/killed, turunkan frame/resolusi/step atau tambah RAM/swap`;
 }
 const ACTIVE_JOB_STATUSES = ['starting', 'running', 'decoding', 'encoding', 'stopping'];
+const PIPELINE_STAGES = ['input', 'text', 'sampling', 'vae', 'video', 'output'];
 
 function framesForDuration(seconds) {
   const target = Math.round(seconds * VIDEO_FPS);
@@ -233,6 +234,21 @@ function jobDurationMs(value) {
   return Number.isFinite(started) && Number.isFinite(finished) ? Math.max(0, finished - started) : null;
 }
 
+function advanceStage(value, stage) {
+  if (!value) return false;
+  const next = PIPELINE_STAGES.indexOf(stage);
+  const current = PIPELINE_STAGES.indexOf(value.stage || 'input');
+  if (next < 0 || next <= current) return false;
+  value.stage = stage;
+  saveState();
+  broadcast('status', { job: publicJob() });
+  return true;
+}
+
+function emitLog(value, line) {
+  broadcast('log', { jobId: value && value.id, line, progress: value && value.progress, stage: value && value.stage });
+}
+
 function publicJob() {
   if (!job) return null;
   return {
@@ -242,6 +258,7 @@ function publicJob() {
     finishedAt: job.finishedAt,
     durationMs: jobDurationMs(job),
     exitCode: job.exitCode,
+    stage: job.stage || null,
     progress: job.progress,
     logs: job.logs.slice(-300),
     output: job.output,
@@ -262,6 +279,7 @@ function loadState() {
       j.logs = Array.isArray(j.logs) ? j.logs : [];
       j.progress = j.progress || { current: 0, total: 0, percent: 0 };
       j.warning = j.warning || null;
+      j.stage = j.stage || (j.status === 'done' ? 'output' : 'input');
       if (ACTIVE_JOB_STATUSES.includes(j.status)) {
         if (j.cancelled) {
           j.status = 'stopped';
@@ -337,18 +355,24 @@ function handleOutput(j, buf) {
       const total = Number(m[2]);
       if (total > 0 && (current !== j.progress.current || total !== j.progress.total)) {
         j.progress = { current, total, percent: Math.round((current / total) * 100) };
+        advanceStage(j, 'sampling');
         broadcast('progress', { jobId: j.id, progress: j.progress });
         saveState();
       }
     }
 
     if (line.startsWith('[E]') || /\berror\b/i.test(line)) j.error = line;
+    if (line.includes('get_learned_condition')) advanceStage(j, 'text');
 
     const sm = line.match(/save result[^']*'([^']+)'/);
-    if (sm) j.output = path.basename(sm[1]);
+    if (sm) {
+      j.output = path.basename(sm[1]);
+      if (j.frames === 1) advanceStage(j, 'output');
+    }
 
     if (line.includes('generate_video completed') && j.status !== 'decoding') {
       j.status = 'decoding';
+      advanceStage(j, 'vae');
       broadcast('status', { job: publicJob() });
       saveState();
     }
@@ -362,7 +386,7 @@ function handleOutput(j, buf) {
       line.includes('generate_video completed') ||
       line.includes('get_learned_condition');
 
-    if (interesting) broadcast('log', { jobId: j.id, line, progress: j.progress });
+    if (interesting) emitLog(j, line);
   }
 }
 
@@ -417,6 +441,7 @@ function startJob(config) {
   job = {
     id,
     status: 'starting',
+    stage: 'input',
     startedAt: now(),
     finishedAt: null,
     exitCode: null,
@@ -465,6 +490,7 @@ function startJob(config) {
       ], { stdio: ['ignore', 'pipe', 'pipe'] });
   job.proc = proc;
   job.status = 'running';
+  job.stage = 'text';
   broadcast('status', { job: publicJob() });
   saveState();
 
@@ -477,7 +503,7 @@ function startJob(config) {
     job.status = 'error';
     job.finishedAt = now();
     broadcast('status', { job: publicJob() });
-    broadcast('log', { jobId: job.id, line: job.error, progress: job.progress });
+    emitLog(job, job.error);
     saveState();
   });
 
@@ -492,28 +518,32 @@ function startJob(config) {
       const line = `job ${id} dihentikan · ${RUNNER_LABEL} exit ${code}`;
       job.logs.push(line);
       if (job.logs.length > 400) job.logs.shift();
-      broadcast('log', { jobId: id, line, progress: job.progress });
+      emitLog(job, line);
     } else {
       if (code !== 0 && !job.error) {
         job.error = code === 137 ? oomError() : `${RUNNER_LABEL} exit ${code}`;
-        if (code === 137) broadcast('log', { jobId: job.id, line: job.error, progress: job.progress });
+        if (code === 137) emitLog(job, job.error);
       }
 
       if (code === 0 && config.frames > 1) {
         job.status = 'encoding';
+        advanceStage(job, 'video');
         broadcast('status', { job: publicJob() });
         const nativeName = path.basename(job.output || outputName);
         const ok = await transcodeToMp4(nativeName, finalName);
         if (ok) {
           job.output = finalName;
-          broadcast('log', { jobId: job.id, line: `video converted to ${finalName}`, progress: job.progress });
+          advanceStage(job, 'output');
+          emitLog(job, `video converted to ${finalName}`);
         } else {
           job.warning = `ffmpeg gagal; video AVI asli tetap ${nativeName}`;
-          broadcast('log', { jobId: job.id, line: job.warning, progress: job.progress });
+          advanceStage(job, 'output');
+          emitLog(job, job.warning);
         }
       }
 
       job.status = code === 0 ? 'done' : 'error';
+      if (code === 0) advanceStage(job, 'output');
     }
     if (code === 0) {
       const meta = {
@@ -558,7 +588,7 @@ function cancelJob() {
   active.logs.push(line);
   if (active.logs.length > 400) active.logs.shift();
   broadcast('status', { job: publicJob() });
-  broadcast('log', { jobId: active.id, line, progress: active.progress });
+  emitLog(active, line);
   saveState();
 
   if (RUNNER === 'docker' && active.container) {

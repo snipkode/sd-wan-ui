@@ -237,6 +237,25 @@ Di sebelahnya ada toggle **Preset / Manual**. Default **Preset** menampilkan pil
 
 Saat job aktif, status menampilkan `ETA ... · selesai ~HH.MM` yang diperbarui tiap detik. Estimasi dihitung dari waktu berjalan dan persentase sampling yang dilaporkan `sd-cli`, jadi baru akurat setelah beberapa step pertama; sebelum itu tampil `ETA menghitung…`. Job selesai menampilkan durasi aktual, juga tersedia sebagai `durationMs` di `/api/status`.
 
+## Indikator pipeline
+
+Panel **Pipeline pemrosesan** ditampilkan tepat sebelum log. Panel ini menunjukkan enam tahap berurutan dan model yang dipakai di tiap tahap:
+
+1. **Input & config** — browser mengirim prompt, negative prompt, frame, steps, CFG, dan resolusi.
+2. **Text encoder** — `umt5-xxl-encoder-Q3_K_S.gguf` mengubah prompt teks jadi vektor kondisi.
+3. **Diffusion sampling** — `wan2.1_t2v_1.3b-q4_k_m.gguf` melakukan denoising sebanyak nilai `steps`.
+4. **VAE decode** — `taew2_1.safetensors` mengubah latent jadi frame gambar yang terlihat.
+5. **Video encode** — `ffmpeg` mengubah AVI jadi MP4 H.264/yuv420p; otomatis ditandai terlewati untuk mode Gambar.
+6. **Output & meta** — file dan sidecar `.json` disimpan di `/root/out` lalu muncul di galeri.
+
+Tahap aktif berwarna biru, tahap selesai hijau, dan tahap gagal merah. Server mengirim field `stage` lewat SSE `status` dan `log`, jadi indikator mengikuti proses asli, bukan hanya menebak dari teks log. Arahkan kursor ke kartu tahap untuk penjelasan lengkap.
+
+## Memahami steps untuk pemula
+
+`steps` adalah jumlah koreksi/denoising yang dilakukan model. Analoginya, `steps=20` berarti model mengoreksi hasilnya sekitar 20 kali sebelum gambar/video dianggap selesai. Semakin tinggi steps, semakin banyak kesempatan model merapikan detail sehingga kualitas biasanya lebih bagus, tetapi waktu proses juga semakin lama dan hampir linear di CPU.
+
+Panduan ringkas yang juga tampil di UI: `4` untuk coba cepat, `10` untuk seimbang, `20` untuk detail lebih halus. Tooltip bertanda `i` tersedia di label **Kualitas**, **Steps**, panel pipeline, dan panel panduan.
+
 ## Menghentikan job
 
 Saat ada inference aktif, tombol **Stop** muncul di sebelah status job. Tombol ini memanggil `POST /api/cancel`, menghentikan container Docker terkait, lalu menandai job sebagai `stopped`.

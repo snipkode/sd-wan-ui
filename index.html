@@ -218,6 +218,28 @@ button {
 #jobMeta { min-width: 0; color: var(--muted); font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .track { height: 5px; margin-top: 10px; border-radius: 999px; background: rgba(118, 118, 128, .28); overflow: hidden; }
 #barFill { width: 0; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--blue), var(--cyan)); transition: width .25s ease; }
+.pipeline { margin-top: 10px; padding: 10px; border: 1px solid var(--stroke); border-radius: 12px; background: rgba(118, 118, 128, .08); }
+.pipeline-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; }
+#pipelineStage { min-width: 0; overflow: hidden; color: var(--cyan); font-weight: 600; letter-spacing: 0; text-overflow: ellipsis; text-transform: none; white-space: nowrap; }
+.pipeline-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin: 0; padding: 0; list-style: none; }
+.pipeline-step { position: relative; min-width: 0; padding: 8px 8px 8px 27px; border: 1px solid rgba(255, 255, 255, .07); border-radius: 10px; background: rgba(255, 255, 255, .03); opacity: .62; }
+.pipeline-step::before { content: attr(data-index); position: absolute; top: 8px; left: 8px; display: grid; place-items: center; width: 14px; height: 14px; border-radius: 50%; color: var(--muted); background: rgba(118, 118, 128, .3); font-size: 9px; font-weight: 800; }
+.pipeline-step strong { display: block; overflow: hidden; color: var(--text); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.pipeline-step code { display: block; overflow: hidden; margin-top: 3px; color: var(--muted); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.pipeline-step small { display: block; margin-top: 3px; color: var(--muted); font-size: 9px; line-height: 1.3; }
+.pipeline-step.done { opacity: 1; border-color: rgba(48, 209, 88, .28); background: rgba(48, 209, 88, .07); }
+.pipeline-step.done::before { content: '✓'; color: var(--green); background: rgba(48, 209, 88, .22); }
+.pipeline-step.active { opacity: 1; border-color: rgba(10, 132, 255, .6); background: rgba(10, 132, 255, .12); box-shadow: 0 0 0 1px rgba(10, 132, 255, .12); }
+.pipeline-step.active::before { color: #fff; background: var(--blue); }
+.pipeline-step.failed { opacity: 1; border-color: rgba(255, 69, 58, .45); background: rgba(255, 69, 58, .1); }
+.pipeline-step.failed::before { content: '!'; color: var(--red); background: rgba(255, 69, 58, .25); }
+.pipeline-step.skipped { opacity: .3; border-style: dashed; }
+.pipeline-step.skipped::before { content: '–'; }
+.guide { margin-top: 10px; border: 1px solid var(--stroke); border-radius: 12px; background: rgba(118, 118, 128, .08); }
+.guide summary { padding: 9px 12px; color: var(--text); font-size: 11px; font-weight: 650; cursor: pointer; }
+.guide-body { padding: 0 12px 10px; color: var(--muted); font-size: 10px; line-height: 1.5; }
+.guide-body p { margin: 0 0 6px; }
+.tip { display: inline-grid; place-items: center; width: 13px; height: 13px; margin-left: 4px; border: 1px solid var(--stroke); border-radius: 50%; color: var(--muted); font-size: 9px; font-weight: 800; cursor: help; vertical-align: middle; }
 .log {
   max-height: 130px;
   margin: 10px 0 0;
@@ -374,6 +396,7 @@ button {
   .preset { margin-top: 14px; }
   .primary { min-height: 48px; }
   .status { margin-top: 16px; padding-top: 16px; }
+  .pipeline-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .gallery-head { align-items: flex-start; }
   .gallery { gap: 8px; }
   .card img, .card video { height: 110px; }
@@ -384,6 +407,7 @@ button {
   main { padding-left: 10px; padding-right: 10px; }
   .surface { padding: 14px; }
   .control-bar { grid-template-columns: 1fr; }
+  .pipeline-steps { grid-template-columns: 1fr; }
   .preset, .quick, .adv { grid-template-columns: 1fr; }
   .adv .wide { grid-column: auto; }
   .filters { width: 100%; }
@@ -439,7 +463,7 @@ button {
             </select>
           </div>
           <div>
-            <label for="presetQuality">Kualitas</label>
+            <label for="presetQuality">Kualitas <span class="tip" title="Preset mengisi steps, CFG, dan ukuran gambar sekaligus. Makin tinggi steps makin lama tapi biasanya makin detail.">i</span></label>
             <select id="presetQuality">
               <option value="">Pilih kualitas</option>
             </select>
@@ -459,7 +483,7 @@ button {
             <small>1 = PNG, &gt;1 = video</small>
           </div>
           <div>
-            <label for="steps">Steps</label>
+            <label for="steps">Steps <span class="tip" title="Jumlah koreksi denoising. 4=cepat, 10=seimbang, 20=lebih detail tapi lebih lama di CPU.">i</span></label>
             <input id="steps" type="number" min="1" max="50" value="10">
             <small>CPU: 4–10 cukup</small>
           </div>
@@ -492,6 +516,14 @@ button {
       </div>
       <button id="genBtn" class="primary" type="submit">Generate Gambar</button>
     </form>
+    <details class="guide" id="stepsGuide">
+      <summary>Panduan cepat: apa itu steps? <span class="tip" title="Steps = jumlah koreksi denoising saat model membuat gambar.">i</span></summary>
+      <div class="guide-body">
+        <p><strong>Steps</strong> adalah jumlah pengulangan koreksi. Analoginya, kalau <code>steps=20</code>, model mengoreksi hasilnya sekitar <strong>20 kali</strong> sebelum gambar/video dianggap selesai.</p>
+        <p>Makin tinggi steps biasanya makin rapi detailnya, tapi makin lama. Makin rendah makin cepat, tapi bisa blur atau kurang sesuai prompt.</p>
+        <p>Rekomendasi CPU: <code>4</code> untuk coba cepat, <code>10</code> untuk seimbang, <code>20</code> kalau butuh detail lebih halus.</p>
+      </div>
+    </details>
     <div class="status">
       <span id="jobStatus" class="badge">idle</span>
       <span id="jobMeta">siap</span>
@@ -499,6 +531,10 @@ button {
       <button id="stopBtn" class="stop" type="button" hidden>Stop</button>
     </div>
     <div class="track"><div id="barFill"></div></div>
+    <div class="pipeline" id="pipeline">
+      <div class="pipeline-head"><span>Pipeline pemrosesan <span class="tip" title="Urutan kerja dari prompt teks sampai file akhir. Arahkan kursor ke tiap tahap untuk detail modelnya.">i</span></span><span id="pipelineStage">menunggu job</span></div>
+      <ol class="pipeline-steps" id="pipelineSteps"></ol>
+    </div>
     <pre id="log" class="log">Menunggu event...</pre>
   </section>
   <section>
@@ -566,6 +602,8 @@ const lightboxDetails = $('lightboxDetails');
 const lightboxClose = $('lightboxClose');
 const lightboxPrev = $('lightboxPrev');
 const lightboxNext = $('lightboxNext');
+const pipelineSteps = $('pipelineSteps');
+const pipelineStage = $('pipelineStage');
 
 let generateMode = 'image';
 let configMode = 'preset';
@@ -578,8 +616,17 @@ let galleryPending = false;
 let lightboxIndex = -1;
 let currentJob = null;
 let logReady = false;
+let pipelineDetail = '';
 const PAGE_SIZE = 12;
 const ACTIVE_STATUSES = ['starting', 'running', 'decoding', 'encoding', 'stopping'];
+const PIPELINE = [
+  { id: 'input', title: 'Input & config', model: 'form → server', short: 'Prompt, steps, dan ukuran.', detail: 'Prompt, negative prompt, jumlah frame, steps, CFG, dan resolusi dikirim dari browser ke server.' },
+  { id: 'text', title: 'Text encoder', model: 'umt5-xxl-encoder-Q3_K_S.gguf', short: 'Teks jadi conditioning.', detail: 'Prompt diubah model UMT5-XXL menjadi vektor kondisi supaya model gambar paham permintaan user.' },
+  { id: 'sampling', title: 'Diffusion sampling', model: 'wan2.1_t2v_1.3b-q4_k_m.gguf', short: 'Koreksi latent 4/10/20×.', detail: 'Model Wan mengulang denoising sebanyak nilai steps. Makin tinggi steps biasanya makin detail, tapi makin lama.' },
+  { id: 'vae', title: 'VAE decode', model: 'taew2_1.safetensors', short: 'Latent jadi piksel/frame.', detail: 'Tiny VAE menerjemahkan hasil latent diffusion menjadi frame gambar yang bisa dilihat.' },
+  { id: 'video', title: 'Video encode', model: 'ffmpeg', short: 'AVI → MP4 H.264.', detail: 'Hanya dipakai untuk frames lebih dari 1. AVI hasil sd-cli dikonversi ke MP4 H.264 yuv420p agar mudah diputar.' },
+  { id: 'output', title: 'Output & meta', model: '/root/out · .json', short: 'Simpan file + detail.', detail: 'File akhir dan sidecar JSON berisi prompt, ukuran, steps, dan durasi proses disimpan lalu masuk galeri.' }
+];
 
 function generatorLabel() {
   return generateMode === 'image' ? 'Generate Gambar' : 'Generate Video';
@@ -630,6 +677,58 @@ function updateEta() {
   const remaining = Math.max(0, elapsed / Math.min(1, ratio) - elapsed);
   const finish = new Date(Date.now() + remaining).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
   eta.textContent = `ETA ~${fmtEta(remaining)} · selesai ~${finish}`;
+}
+
+function renderPipelineShell() {
+  pipelineSteps.innerHTML = PIPELINE.map((step, i) => `<li class="pipeline-step" data-stage="${step.id}" data-index="${i + 1}" title="${step.detail}"><strong>${step.title}</strong><code>${step.model}</code><small>${step.short}</small></li>`).join('');
+  updatePipeline(currentJob);
+}
+
+function notePipeline(stage, line) {
+  if (!stage) return;
+  pipelineDetail = String(line || '').slice(0, 120);
+  if (currentJob) {
+    currentJob.stage = stage;
+    updatePipeline(currentJob);
+    return;
+  }
+  const step = PIPELINE.find((item) => item.id === stage);
+  pipelineStage.textContent = step ? step.title : stage;
+  pipelineStage.title = pipelineDetail;
+}
+
+function updatePipeline(job) {
+  const frames = Number(job && job.frames) || Number($('frames').value) || 1;
+  const isVideo = frames > 1;
+  const current = job && job.stage ? PIPELINE.findIndex((item) => item.id === job.stage) : -1;
+  const finished = Boolean(job && job.status === 'done');
+  const failed = Boolean(job && ['error', 'stopped', 'stopping'].includes(job.status));
+  const activeIndex = Math.max(0, current);
+  if (!job) {
+    pipelineStage.textContent = 'menunggu job';
+    pipelineStage.removeAttribute('title');
+  } else if (finished) {
+    pipelineStage.textContent = 'selesai · output tersimpan';
+    pipelineStage.removeAttribute('title');
+  } else {
+    const step = PIPELINE[activeIndex] || PIPELINE[0];
+    const pct = job.status === 'running' && job.progress && job.progress.percent ? ` · ${job.progress.percent}%` : '';
+    pipelineStage.textContent = `${step.title}${pct}${failed ? ` · ${job.status}` : ''}`;
+    if (pipelineDetail) pipelineStage.title = pipelineDetail;
+    else pipelineStage.removeAttribute('title');
+  }
+  Array.from(pipelineSteps.children).forEach((el, i) => {
+    const skipped = PIPELINE[i].id === 'video' && !isVideo;
+    const done = !skipped && (finished || (current >= 0 && i < current));
+    const active = !skipped && !finished && !failed && Boolean(job) && i === activeIndex;
+    const bad = !skipped && failed && Boolean(job) && i === activeIndex;
+    el.classList.toggle('skipped', skipped);
+    el.classList.toggle('done', done);
+    el.classList.toggle('active', active);
+    el.classList.toggle('failed', bad);
+    if (active || bad) el.setAttribute('aria-current', 'step');
+    else el.removeAttribute('aria-current');
+  });
 }
 
 if (window.innerWidth < 700) $('advanced').open = false;
@@ -741,10 +840,12 @@ function renderProgress(progress) {
     jobMeta.textContent = `${currentJob.frames} frame · ${pct}% · ${progress.current || 0}/${progress.total || currentJob.progress.total || 0}`;
   }
   updateEta();
+  updatePipeline(currentJob);
 }
 
 function renderJob(job) {
   currentJob = job;
+  updatePipeline(job);
   const genLabel = generatorLabel();
   if (!job) {
     jobStatus.textContent = 'idle';
@@ -977,6 +1078,7 @@ async function loadFiles(targetPage = currentPage) {
   }
 }
 
+renderPipelineShell();
 const es = new EventSource('/api/stream');
 es.addEventListener('open', () => setConn('live', true));
 es.addEventListener('error', () => setConn('reconnect', false));
@@ -987,7 +1089,11 @@ es.addEventListener('hello', (event) => {
 });
 es.addEventListener('status', (event) => renderJob(JSON.parse(event.data).job));
 es.addEventListener('progress', (event) => renderProgress(JSON.parse(event.data).progress));
-es.addEventListener('log', (event) => pushLog(JSON.parse(event.data).line));
+es.addEventListener('log', (event) => {
+  const data = JSON.parse(event.data);
+  pushLog(data.line);
+  notePipeline(data.stage, data.line);
+});
 es.addEventListener('files', (event) => {
   renderCounts(JSON.parse(event.data).counts);
   loadFiles(currentPage);
@@ -1000,6 +1106,7 @@ configPreset.addEventListener('click', () => setConfigMode('preset'));
 configManual.addEventListener('click', () => setConfigMode('manual'));
 presetDuration.addEventListener('change', applyPreset);
 presetQuality.addEventListener('change', applyPreset);
+$('frames').addEventListener('input', () => updatePipeline(currentJob));
 setConfigMode('preset');
 setMode('image');
 loadPresets();
