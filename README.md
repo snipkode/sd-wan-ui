@@ -16,7 +16,6 @@ Diukur 2026-11-21 pada host yang menjalankan UI ini.
 
 | Item | Nilai |
 | --- | --- |
-| IP publik | `72.60.237.147` |
 | OS | Ubuntu 24.04.4 LTS (Noble Numbat) |
 | Kernel | Linux 6.8.0-147-generic |
 | Virtualisasi | KVM full, BIOS QEMU `pc-i440fx-11.0` |
