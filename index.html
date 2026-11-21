@@ -492,11 +492,11 @@ button {
           <summary>Pengaturan lanjutan</summary>
           <div class="adv">
             <div>
-              <label for="cfg">CFG</label>
+              <label for="cfg">CFG <span class="tip" title="Seberapa kuat model mengikuti prompt. 6 = default aman; terlalu rendah prompt mudah diabaikan, terlalu tinggi bisa kaku atau berantakan.">i</span></label>
               <input id="cfg" type="number" min="0" max="20" step="0.5" value="6">
             </div>
             <div>
-              <label for="sampler">Sampler</label>
+              <label for="sampler">Sampler <span class="tip" title="Metode langkah denoising. euler dipakai karena cepat dan stabil di CPU; saat ini nilai ini dikunci.">i</span></label>
               <input id="sampler" value="euler" disabled>
             </div>
             <div>
@@ -508,7 +508,7 @@ button {
               <input id="height" type="number" min="256" max="1024" step="16" value="320">
             </div>
             <div class="wide">
-              <label for="negative">Negative prompt</label>
+              <label for="negative">Negative prompt <span class="tip" title="Hal yang ingin dihindari, misalnya blur, watermark, atau teks. Bukan pengganti prompt utama; terlalu panjang bisa mengganggu hasil.">i</span></label>
               <input id="negative" maxlength="500" value="blurry, low quality, watermark, text">
             </div>
           </div>
@@ -522,6 +522,14 @@ button {
         <p><strong>Steps</strong> adalah jumlah pengulangan koreksi. Analoginya, kalau <code>steps=20</code>, model mengoreksi hasilnya sekitar <strong>20 kali</strong> sebelum gambar/video dianggap selesai.</p>
         <p>Makin tinggi steps biasanya makin rapi detailnya, tapi makin lama. Makin rendah makin cepat, tapi bisa blur atau kurang sesuai prompt.</p>
         <p>Rekomendasi CPU: <code>4</code> untuk coba cepat, <code>10</code> untuk seimbang, <code>20</code> kalau butuh detail lebih halus.</p>
+      </div>
+    </details>
+    <details class="guide" id="manualGuide">
+      <summary>Panduan manual: CFG, sampler, negative prompt <span class="tip" title="Penjelasan singkat untuk kontrol di Pengaturan lanjutan.">i</span></summary>
+      <div class="guide-body">
+        <p><strong>CFG</strong> mengatur seberapa keras model menuruti prompt. Nilai <code>6</code> sudah seimbang; kalau terlalu kecil prompt bisa diabaikan, kalau terlalu besar hasil bisa kaku atau berantakan.</p>
+        <p><strong>Sampler</strong> adalah metode untuk mengeksekusi langkah denoising. UI memakai <code>euler</code> karena cepat dan stabil di CPU, jadi kolomnya dikunci.</p>
+        <p><strong>Negative prompt</strong> berisi hal yang tidak ingin muncul, misalnya <code>blur</code>, <code>watermark</code>, atau <code>text</code>. Ini pelengkap prompt utama, bukan pengganti. Kalimat terlalu panjang bisa membuat hasil kurang fokus.</p>
       </div>
     </details>
     <div class="status">

@@ -256,6 +256,16 @@ Tahap aktif berwarna biru, tahap selesai hijau, dan tahap gagal merah. Server me
 
 Panduan ringkas yang juga tampil di UI: `4` untuk coba cepat, `10` untuk seimbang, `20` untuk detail lebih halus. Tooltip bertanda `i` tersedia di label **Kualitas**, **Steps**, panel pipeline, dan panel panduan.
 
+## Panduan kontrol manual
+
+Panel **Panduan manual** yang bisa dibuka di UI menjelaskan tiga kontrol lanjutan:
+
+- **CFG** — seberapa keras model menuruti prompt. `6` adalah default aman; nilai kecil membuat prompt mudah diabaikan, nilai besar bisa membuat hasil kaku atau berantakan.
+- **Sampler** — metode eksekusi denoising. UI memakai `euler` karena cepat dan stabil di CPU, sehingga kolomnya dikunci.
+- **Negative prompt** — daftar hal yang ingin dihindari seperti `blur`, `watermark`, atau `text`. Ini pelengkap prompt utama, bukan pengganti, dan sebaiknya tidak terlalu panjang.
+
+Ketiga label juga punya tooltip `i` langsung di form saat mode Manual dipakai.
+
 ## Menghentikan job
 
 Saat ada inference aktif, tombol **Stop** muncul di sebelah status job. Tombol ini memanggil `POST /api/cancel`, menghentikan container Docker terkait, lalu menandai job sebagai `stopped`.

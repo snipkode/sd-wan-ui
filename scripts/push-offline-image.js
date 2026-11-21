@@ -64,7 +64,7 @@ async function createRepo() {
   const token = await hubLogin();
   const body = JSON.stringify({
     name: TARGET_NAME,
-    description: 'Full portable Wan 2.1 UI with offline models included. No model download needed.'
+    description: 'Full portable Wan 2.1 UI with offline models and pipeline guide included.'
   });
   const res = await request('hub.docker.com', '/v2/repositories/snipkode/', 'POST', {
     Authorization: 'JWT ' + token,
