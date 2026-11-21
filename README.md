@@ -106,6 +106,56 @@ Backend dipilih otomatis sebagai CPU. Tidak ada flag CUDA/Vulkan karena host tid
 
 Untuk video, server meminta `.avi` ke `sd-cli`, lalu setelah container selesai menjalankan `ffmpeg` untuk menghasilkan `.mp4` H.264/yuv420p yang bisa diputar browser. AVI asli dihapus kecuali `KEEP_AVI=1`. Jika `ffmpeg` tidak tersedia, AVI tetap disimpan dan UI menampilkan warning.
 
+## Generate gambar (`frames=1`)
+
+Aplikasi tetap memakai mode Wan `-M vid_gen`, tetapi **`frames=1` menghasilkan satu file PNG**. Tidak ada AVI maupun ffmpeg untuk mode ini; hasil langsung muncul di filter **Gambar** dengan nama `wan-<timestamp>-<n>.png`.
+
+### Arti config saat generate gambar
+
+| Field UI | Argumen `sd-cli` | Default | Rekomendasi | Penjelasan |
+| --- | --- | --- | --- | --- |
+| Prompt | `-p` | `a lovely cat walking in neon rain...` | Deskripsikan subjek, gaya, pencahayaan, dan komposisi | Diolah UMT5-XXL menjadi conditioning positif |
+| Frames | `--video-frames 1` | `1` | **Wajib `1`** | `1` → PNG. Nilai `>1` berubah jadi video dan tidak dipakai untuk generate gambar |
+| Steps | `--steps` | `10` | `4` cepat, `10` seimbang, `20–30` final | Jumlah iterasi denoising. Tidak mengubah ukuran gambar; makin banyak makin rapi tapi makin lama. Di 2 core CPU, `512x320` / 10 step memakan ±2–3 menit |
+| CFG | `--cfg-scale` | `6.0` | `5–7` | Seberapa kuat prompt memandu hasil. CFG juga memperkuat negative prompt. Terlalu tinggi bisa over-saturasi/artefak; terlalu rendah membuat prompt terabaikan |
+| Negative | `-n` | `blurry, low quality, watermark, text` | Tambah `jpeg artifacts, flicker, deformed` bila perlu | Daftar hal yang ingin dihindari, bukan filter setelah jadi. Jangan memasukkan elemen yang memang diinginkan |
+| Sampler | `--sampling-method euler` | `euler` | `euler` | Solver default Wan untuk FLOW; cepat dan stabil di CPU. Field di UI sengaja disabled karena server meng-hardcode nilai ini |
+| Flow shift | `--flow-shift 3.0` | `3.0` | Biarkan | Menyesuaikan jadwal noise FLOW. Umumnya tidak perlu diubah |
+| Width / Height | `-W` / `-H` | `512 x 320` | `320x256` cepat, `512x320` seimbang | Server memaksa kelipatan 16. Resolusi lebih tinggi menambah waktu dan RAM |
+| Seed | `-s` | belum diekspos | — | Saat ini memakai perilaku default `sd-cli`; belum bisa diatur dari UI |
+
+### Langkah di UI
+
+1. Isi **Prompt**.
+2. Set **Frames = 1** dan **Steps = 10** (atau `4` untuk coba cepat).
+3. Buka **Pengaturan lanjutan**, atur **CFG = 6** dan **Negative prompt** bila perlu.
+4. Klik **Generate**. Progres tetap muncul lewat SSE seperti mode video.
+5. File PNG muncul di gallery pada filter **Gambar**.
+
+### Contoh via API
+
+```bash
+curl -X POST http://127.0.0.1:3001/api/generate \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "prompt": "portrait of a cat astronaut, cinematic lighting, detailed fur",
+    "negative": "blurry, low quality, watermark, text, deformed",
+    "frames": 1,
+    "steps": 10,
+    "cfg": 6,
+    "width": 512,
+    "height": 320
+  }'
+```
+
+### Tips cepat
+
+- Hasil terlalu lembek/curang detail → naikkan `steps` ke `20–30`.
+- Prompt kurang diikuti → naikkan `cfg` ke `7–8` atau perjelas prompt.
+- Warna terlalu "terbakar"/kontras → turunkan `cfg` ke `4–5`.
+- CPU terlalu lambat → pakai `320x256` dan `steps=4`.
+- Ingin variasi berbeda dengan prompt sama → ubah seed, tetapi opsi ini belum tersedia di UI saat ini.
+
 ## API
 
 | Method | Endpoint | Keterangan |
