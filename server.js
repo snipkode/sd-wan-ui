@@ -20,6 +20,7 @@ fs.mkdirSync(OUT_DIR, { recursive: true });
 const HTML = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
 const BOOT = Date.now();
 const VIDEO_FPS = 16;
+const OOM_ERROR = 'docker exit 137: OOM/killed, turunkan frame/resolusi/step atau tambah RAM/swap';
 
 function framesForDuration(seconds) {
   const target = Math.round(seconds * VIDEO_FPS);
@@ -179,6 +180,7 @@ function loadState() {
         j.error = 'server restarted while job was running';
         j.finishedAt = j.finishedAt || now();
       }
+      if (j.exitCode === 137 && String(j.error || '').startsWith('docker exit 137')) j.error = OOM_ERROR;
       job = j;
     }
   } catch {
@@ -383,9 +385,7 @@ function startJob(config) {
     job.exitCode = code;
     job.finishedAt = now();
     if (code !== 0 && !job.error) {
-      job.error = code === 137
-        ? 'docker exit 137: OOM/killed, turunkan frame/resolusi/step atau tambah RAM/swap'
-        : `docker exit ${code}`;
+      job.error = code === 137 ? OOM_ERROR : `docker exit ${code}`;
       if (code === 137) broadcast('log', { jobId: job.id, line: job.error, progress: job.progress });
     }
 
