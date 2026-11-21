@@ -63,6 +63,22 @@ Contoh: menaikkan `steps` dari 20 ke 21 pada job 29 frame/512x320 menambah sekit
 
 CPU AMD EPYC 9355P terlihat modern dan mendukung AVX-512, tetapi hanya 2 vCPU yang dilewatkan ke VM dan tidak ada GPU. Swap mulai terpakai saat inference video 512x320/20 step, jadi jangan menjalankan dua job bersamaan. Disk juga kritikal, lakukan cleanup sebelum preset 25 detik ke atas.
 
+### Proses CPU vs GPU
+
+Versi `sd-cli` bisa tetap `master-1106-532d2c1`; yang berbeda adalah build/image backend dan device yang dipakai. Alur inference tetap sama, hanya lokasi weight dan komputasi yang berpindah.
+
+| Tahap | CPU — default sekarang | GPU — setelah image + driver siap |
+| --- | --- | --- |
+| Docker flag | `--backend cpu`, tanpa flag GPU | `--gpus all --backend cuda0` atau `--device /dev/dri --backend vulkan0` |
+| Backend | `libggml-cpu-zen4.so`, 2 thread | CUDA/Vulkan backend, paralelisme jauh lebih besar |
+| Weight | RAM ±3.7 GB | VRAM; `auto-fit` offload ke RAM/disk jika VRAM kurang |
+| T5 encode prompt + negative | ±35.7 detik terukur | ±2–8 detik estimasi |
+| Denoise 29 frame, 512x320, 1 step | ±114 detik terukur | ±1–4 detik estimasi |
+| TAEHV decode | ±10 detik terukur | ±1–3 detik estimasi |
+| AVI → MP4 via `ffmpeg` | Sama, berjalan di host | Sama, kecuali encoder GPU diatur terpisah |
+
+Contoh job 29 frame/512x320/20 step: CPU sekitar **38 menit**, GPU kelas 8–12 GB sekitar **1–3 menit**. Angka GPU belum diukur di VPS ini karena GPU belum tersedia, jadi hanya estimasi. Jika VRAM kurang dari 8 GB dan `auto-fit` mulai offload ke RAM, kecepatan bisa turun drastis mendekati CPU.
+
 Untuk mengecek ulang:
 
 ```bash
