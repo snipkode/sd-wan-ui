@@ -231,6 +231,8 @@ UI menyediakan toggle **Gambar** / **Video** di bagian atas form. Default adalah
 
 Toggle ini hanya mengubah UI dan payload yang dikirim; backend tetap menentukan gambar/video dari nilai `frames`.
 
+Di sebelahnya ada toggle **Preset / Manual**. Default **Preset** menampilkan pilihan durasi + kualitas dan menyembunyikan input mentah. **Manual** menyembunyikan preset, menampilkan `frames`/`steps`, dan membuka **Pengaturan lanjutan** berisi CFG, width, height, serta negative prompt. Keduanya mengirim payload yang sama ke backend.
+
 ## Menghentikan job
 
 Saat ada inference aktif, tombol **Stop** muncul di sebelah status job. Tombol ini memanggil `POST /api/cancel`, menghentikan container Docker terkait, lalu menandai job sebagai `stopped`.

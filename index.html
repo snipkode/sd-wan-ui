@@ -89,6 +89,8 @@ main {
   margin-bottom: 12px;
 }
 .gen-form { display: block; }
+.control-bar { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.control-label { display: block; margin-bottom: 6px; color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; }
 .gen-group + .gen-group {
   margin-top: 14px;
   padding-top: 14px;
@@ -379,6 +381,7 @@ button {
 @media (max-width: 360px) {
   main { padding-left: 10px; padding-right: 10px; }
   .surface { padding: 14px; }
+  .control-bar { grid-template-columns: 1fr; }
   .preset, .quick, .adv { grid-template-columns: 1fr; }
   .adv .wide { grid-column: auto; }
   .filters { width: 100%; }
@@ -404,10 +407,28 @@ button {
     </div>
     <form id="genForm" class="gen-form">
       <div class="gen-group">
-        <div class="mode" role="group" aria-label="Mode generate">
-          <button type="button" id="modeImage" class="active" aria-pressed="true">Gambar</button>
-          <button type="button" id="modeVideo" aria-pressed="false">Video</button>
+        <div class="control-bar">
+          <div>
+            <span class="control-label">Jenis</span>
+            <div class="mode" role="group" aria-label="Mode generate">
+              <button type="button" id="modeImage" class="active" aria-pressed="true">Gambar</button>
+              <button type="button" id="modeVideo" aria-pressed="false">Video</button>
+            </div>
+          </div>
+          <div>
+            <span class="control-label">Konfigurasi</span>
+            <div class="mode" role="group" aria-label="Sumber konfigurasi">
+              <button type="button" id="configPreset" class="active" aria-pressed="true">Preset</button>
+              <button type="button" id="configManual" aria-pressed="false">Manual</button>
+            </div>
+          </div>
         </div>
+      </div>
+      <div class="gen-group">
+        <label for="prompt" class="prompt-label">Prompt</label>
+        <textarea id="prompt" maxlength="500" spellcheck="false">a lovely cat walking in neon rain, cinematic lighting, shallow depth of field</textarea>
+      </div>
+      <div class="gen-group" id="presetPanel">
         <div class="preset" id="presetRow">
           <div>
             <label for="presetDuration">Durasi video</label>
@@ -424,11 +445,7 @@ button {
         </div>
         <small id="presetHint">Pilih durasi + kualitas untuk mengisi config otomatis.</small>
       </div>
-      <div class="gen-group">
-        <label for="prompt" class="prompt-label">Prompt</label>
-        <textarea id="prompt" maxlength="500" spellcheck="false">a lovely cat walking in neon rain, cinematic lighting, shallow depth of field</textarea>
-      </div>
-      <div class="gen-group">
+      <div class="gen-group" id="manualPanel" hidden>
         <div class="quick">
           <div>
             <label for="frames">Frames</label>
@@ -523,6 +540,10 @@ const presetDuration = $('presetDuration');
 const presetQuality = $('presetQuality');
 const presetHint = $('presetHint');
 const presetRow = $('presetRow');
+const presetPanel = $('presetPanel');
+const manualPanel = $('manualPanel');
+const configPreset = $('configPreset');
+const configManual = $('configManual');
 const modeImage = $('modeImage');
 const modeVideo = $('modeVideo');
 const pagination = $('pagination');
@@ -538,6 +559,7 @@ const lightboxPrev = $('lightboxPrev');
 const lightboxNext = $('lightboxNext');
 
 let generateMode = 'image';
+let configMode = 'preset';
 let presetData = null;
 let galleryFiles = [];
 let activeFilter = 'all';
@@ -552,6 +574,19 @@ const ACTIVE_STATUSES = ['starting', 'running', 'decoding', 'encoding', 'stoppin
 
 function generatorLabel() {
   return generateMode === 'image' ? 'Generate Gambar' : 'Generate Video';
+}
+
+function setConfigMode(mode) {
+  configMode = mode === 'manual' ? 'manual' : 'preset';
+  const isPreset = configMode === 'preset';
+  configPreset.classList.toggle('active', isPreset);
+  configManual.classList.toggle('active', !isPreset);
+  configPreset.setAttribute('aria-pressed', String(isPreset));
+  configManual.setAttribute('aria-pressed', String(!isPreset));
+  presetPanel.hidden = !isPreset;
+  manualPanel.hidden = isPreset;
+  if (isPreset) applyPreset();
+  else $('advanced').open = true;
 }
 
 if (window.innerWidth < 700) $('advanced').open = false;
@@ -912,8 +947,11 @@ es.addEventListener('file', (event) => pushLog(`file baru: ${event.data ? JSON.p
 
 modeImage.addEventListener('click', () => setMode('image'));
 modeVideo.addEventListener('click', () => setMode('video'));
+configPreset.addEventListener('click', () => setConfigMode('preset'));
+configManual.addEventListener('click', () => setConfigMode('manual'));
 presetDuration.addEventListener('change', applyPreset);
 presetQuality.addEventListener('change', applyPreset);
+setConfigMode('preset');
 setMode('image');
 loadPresets();
 loadFiles(1);
