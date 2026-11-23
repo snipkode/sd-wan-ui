@@ -34,6 +34,21 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
     </button>
   </div>
+
+  <div class="account-card" aria-label="Akun pengguna">
+    <div class="account-avatar" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21a8 8 0 1 0-16 0"/><circle cx="12" cy="8" r="4"/></svg>
+    </div>
+    <div class="account-body">
+      <div class="account-row">
+        <p class="account-name">Pengguna Anonim</p>
+        <span id="accountBadge" class="account-badge">Guest</span>
+      </div>
+      <p class="account-meta">Belum masuk · sesi lokal</p>
+    </div>
+  </div>
+
+  <p class="side-section-label">Navigasi</p>
   <nav class="side-nav" aria-label="Halaman">
     <button type="button" class="side-link active" data-page="generate">
       <span class="side-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><path d="M17 13v8m-4-4h8"/></svg></span>
@@ -44,9 +59,6 @@
       <span class="side-copy"><span class="side-link-title">Hasil</span><span class="side-link-sub" id="sideResultCount">0 file</span></span>
     </button>
   </nav>
-  <div class="sidebar-foot">
-    <p id="sidebarStatus" class="sidebar-status"><span class="status-dot"></span><span>Connecting</span></p>
-  </div>
 </aside>
 <main class="layout">
   <section class="surface page-panel" id="pageGenerate">

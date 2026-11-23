@@ -55,7 +55,7 @@ const menuBtn = $('menuBtn');
 const sidebar = $('sidebar');
 const sidebarOverlay = $('sidebarOverlay');
 const sidebarClose = $('sidebarClose');
-const sidebarStatus = $('sidebarStatus');
+const accountBadge = $('accountBadge');
 const pageGenerate = $('pageGenerate');
 const pageResults = $('pageResults');
 const sideResultCount = $('sideResultCount');
@@ -220,9 +220,9 @@ if (window.innerWidth < 700) $('advanced').open = false;
 function setConn(text, ok) {
   conn.textContent = text;
   conn.className = `pill ${ok ? 'ok' : 'bad'}`;
-  if (sidebarStatus) {
-    sidebarStatus.className = `sidebar-status ${ok ? 'ok' : 'bad'}`;
-    sidebarStatus.lastElementChild.textContent = text;
+  if (accountBadge) {
+    accountBadge.textContent = ok ? 'Live' : 'Offline';
+    accountBadge.className = `account-badge ${ok ? 'ok' : 'bad'}`;
   }
 }
 
