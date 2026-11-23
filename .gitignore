@@ -20,3 +20,5 @@ node_modules/
 *.mov
 *.log
 .DS_Store
+tools/
+sd-vulkan/
