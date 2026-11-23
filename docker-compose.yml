@@ -35,9 +35,9 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./server.js:/app/server.js:ro
       - ./public:/app/public:ro
-      - /root/models/wan:/app/models/wan:ro
-      - ./models/inpaint:/inpaint:ro
-      - ./input:/app/input
-      - ./out:/app/out
+      - ${MODEL_HOST_DIR:-${PWD}/models}:/app/models:ro
+      - ${INPAINT_MODEL_HOST_DIR:-${PWD}/models/inpaint}:/inpaint:ro
+      - ${INPUT_HOST_DIR:-${PWD}/input}:/app/input
+      - ${OUT_HOST_DIR:-${PWD}/out}:/app/out
       - ./runtime:/app/runtime
     restart: unless-stopped
