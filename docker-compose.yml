@@ -35,7 +35,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./server.js:/app/server.js:ro
       - ./public:/app/public:ro
-      - ./models:/app/models
+      - /root/models/wan:/app/models/wan:ro
       - ./models/inpaint:/inpaint:ro
       - ./input:/app/input
       - ./out:/app/out

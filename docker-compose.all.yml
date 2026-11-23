@@ -30,7 +30,7 @@ services:
     volumes:
       - ./server.js:/app/server.js
       - ./public:/app/public
-      - ./models:/models
+      - /root/models/wan:/models/wan:ro
       - ./models/inpaint:/inpaint:ro
       - ./input:/input
       - ./out:/output
