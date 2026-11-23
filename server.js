@@ -1,7 +1,7 @@
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
-const { spawn } = require('node:child_process');
+const { spawn, spawnSync } = require('node:child_process');
 
 const HOST = process.env.HOST || '0.0.0.0';
 const PORT = Number(process.env.PORT || 3001);
@@ -14,7 +14,10 @@ const IMAGE = process.env.SD_IMAGE || 'sd-cpu:local';
 const RUNNER = String(process.env.SD_RUNNER || 'docker').trim().toLowerCase() === 'local' ? 'local' : 'docker';
 const RUNNER_LABEL = RUNNER === 'local' ? 'sd-cli' : 'docker';
 const SD_CLI_BIN = process.env.SD_CLI_BIN || '/sd.cpp/bin/sd-cli';
-const BACKEND = String(process.env.SD_BACKEND || 'cpu').trim();
+const BACKEND_ENV = String(process.env.SD_BACKEND || 'cpu').trim() || 'cpu';
+const PARAMS_BACKEND = String(process.env.SD_PARAMS_BACKEND || '').trim();
+const MAX_VRAM = String(process.env.SD_MAX_VRAM || '').trim();
+const CPU_THREADS = String(process.env.SD_THREADS || '').trim();
 const GPU_DEVICES = String(process.env.GPU_DEVICES || 'all').trim() || 'all';
 const VULKAN_DEVICE = String(process.env.VULKAN_DEVICE || '/dev/dri').trim() || '/dev/dri';
 const EXTRA_ARGS = parseCliArgs(process.env.SD_EXTRA_ARGS || '');
@@ -49,15 +52,38 @@ function parseCliArgs(value) {
   return parts.map((part) => part.replace(/^(["'])(.*)\1$/, '$2'));
 }
 
+function detectGpuDevice() {
+  if (RUNNER !== 'local') return '';
+  try {
+    const probe = spawnSync(SD_CLI_BIN, ['--list-devices'], { encoding: 'utf8', timeout: 20000 });
+    const devices = String(probe.stdout || '')
+      .split(/\r?\n/)
+      .map((line) => line.split('\t')[0].trim())
+      .filter(Boolean);
+    return devices.find((name) => /^cuda/i.test(name)) || devices.find((name) => /^vulkan/i.test(name)) || '';
+  } catch {
+    return '';
+  }
+}
+
+const AUTO_BACKEND = BACKEND_ENV.toLowerCase() === 'auto';
+const BACKEND = AUTO_BACKEND ? detectGpuDevice() || 'cpu' : BACKEND_ENV;
+
 function normalizedBackend() {
-  const value = BACKEND.toLowerCase() || 'cpu';
-  if (value === 'cuda') return 'cuda0';
-  if (value === 'vulkan') return 'vulkan0';
-  return value;
+  const value = String(BACKEND).trim() || 'cpu';
+  if (value.includes('=')) return value;
+  const lowered = value.toLowerCase();
+  if (lowered === 'cuda') return 'cuda0';
+  if (lowered === 'vulkan') return 'vulkan0';
+  return lowered;
 }
 
 function backendCliArgs() {
-  return ['--backend', normalizedBackend()];
+  const args = ['--backend', normalizedBackend()];
+  if (PARAMS_BACKEND) args.push('--params-backend', PARAMS_BACKEND);
+  if (MAX_VRAM) args.push('--max-vram', MAX_VRAM);
+  if (CPU_THREADS) args.push('-t', CPU_THREADS);
+  return args;
 }
 
 function parseMultipart(buffer, boundary) {
@@ -141,7 +167,8 @@ function maskBox(width, height, fields) {
 }
 
 function dockerDeviceArgs() {
-  const value = normalizedBackend();
+  const value = `${normalizedBackend()} ${PARAMS_BACKEND}`.toLowerCase();
+  if (!value.includes('cuda') && !value.includes('vulkan')) return [];
   const args = [];
   if (value.includes('cuda')) args.push('--gpus', GPU_DEVICES);
   if (value.includes('vulkan')) args.push('--device', VULKAN_DEVICE);
@@ -1120,6 +1147,10 @@ const server = http.createServer(async (req, res) => {
       auth: Boolean(UI_TOKEN),
       job: current ? current.status : null,
       backend: normalizedBackend(),
+      backendSource: AUTO_BACKEND ? 'auto' : 'env',
+      paramsBackend: PARAMS_BACKEND || null,
+      maxVram: MAX_VRAM || null,
+      threads: CPU_THREADS || null,
       runner: RUNNER,
       image: IMAGE,
       cli: SD_CLI_BIN,

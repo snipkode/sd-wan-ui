@@ -1694,7 +1694,7 @@ setInterval(async () => {
   try {
     const response = await fetch('/api/health');
     const data = await response.json();
-    clock.textContent = `up ${data.uptime}s`;
+    clock.textContent = data.backend ? `${data.backend} · up ${data.uptime}s` : `up ${data.uptime}s`;
   } catch {
     clock.textContent = 'offline';
   }

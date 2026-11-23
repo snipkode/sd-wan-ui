@@ -23,6 +23,9 @@ services:
       STATE_FILE: /app/runtime/state.json
       SD_IMAGE: ${SD_IMAGE:-snipkode/sd-wan-infer:latest}
       SD_BACKEND: ${SD_BACKEND:-cpu}
+      SD_PARAMS_BACKEND: ${SD_PARAMS_BACKEND:-}
+      SD_MAX_VRAM: ${SD_MAX_VRAM:-}
+      SD_THREADS: ${SD_THREADS:-}
       GPU_DEVICES: ${GPU_DEVICES:-all}
       VULKAN_DEVICE: ${VULKAN_DEVICE:-/dev/dri}
       SD_EXTRA_ARGS: ${SD_EXTRA_ARGS:-}

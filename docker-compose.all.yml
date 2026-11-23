@@ -20,6 +20,9 @@ services:
       SD_RUNNER: local
       SD_CLI_BIN: /sd.cpp/bin/sd-cli
       SD_BACKEND: ${SD_BACKEND:-cpu}
+      SD_PARAMS_BACKEND: ${SD_PARAMS_BACKEND:-}
+      SD_MAX_VRAM: ${SD_MAX_VRAM:-}
+      SD_THREADS: ${SD_THREADS:-}
       SD_EXTRA_ARGS: ${SD_EXTRA_ARGS:-}
       FFMPEG_BIN: /usr/bin/ffmpeg
       KEEP_AVI: ${KEEP_AVI:-0}
