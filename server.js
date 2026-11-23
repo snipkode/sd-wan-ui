@@ -33,7 +33,7 @@ const STATE_FILE = path.resolve(process.env.STATE_FILE || path.join(__dirname, '
 fs.mkdirSync(OUT_DIR, { recursive: true });
 fs.mkdirSync(INPUT_DIR, { recursive: true });
 fs.mkdirSync(path.dirname(STATE_FILE), { recursive: true });
-const HTML = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
+const PUBLIC_DIR = path.join(__dirname, 'public');
 const BOOT = Date.now();
 const VIDEO_FPS = 16;
 function oomError() {
@@ -1061,6 +1061,23 @@ function handleStream(req, res) {
   });
 }
 
+function servePublic(res, pathname) {
+  const allowed = {
+    '/index.html': { file: 'index.html', type: 'text/html; charset=utf-8' },
+    '/styles.css': { file: 'styles.css', type: 'text/css; charset=utf-8' },
+    '/app.js': { file: 'app.js', type: 'application/javascript; charset=utf-8' }
+  };
+  const entry = allowed[pathname];
+  if (!entry) return send(res, 404, { error: 'not found' });
+  const file = path.join(PUBLIC_DIR, entry.file);
+  try {
+    const data = fs.readFileSync(file);
+    return send(res, 200, data, entry.type);
+  } catch {
+    return send(res, 404, { error: 'not found' });
+  }
+}
+
 function handleOut(req, res, pathname, download) {
   let name;
   try {
@@ -1162,7 +1179,8 @@ const server = http.createServer(async (req, res) => {
   }
   if (!checkAuth(req, res)) return;
 
-  if (p === '/' || p === '/index.html') return send(res, 200, HTML, 'text/html; charset=utf-8');
+  if (p === '/' || p === '/index.html') return servePublic(res, '/index.html');
+  if (p === '/styles.css' || p === '/app.js') return servePublic(res, p);
   if (p === '/api/status') return send(res, 200, { job: publicJob(), counts: fileCounts() });
   if (p === '/api/files') return send(res, 200, filePage(url.searchParams.get('page'), url.searchParams.get('limit'), url.searchParams.get('type')));
   if (p === '/api/presets') return send(res, 200, {

@@ -26,7 +26,10 @@ services:
       SD_EXTRA_ARGS: ${SD_EXTRA_ARGS:-}
       FFMPEG_BIN: /usr/bin/ffmpeg
       KEEP_AVI: ${KEEP_AVI:-0}
+    command: ["node", "--watch", "/app/server.js"]
     volumes:
+      - ./server.js:/app/server.js
+      - ./public:/app/public
       - ./models:/models
       - ./models/inpaint:/inpaint:ro
       - ./input:/input

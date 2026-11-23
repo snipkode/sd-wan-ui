@@ -14,7 +14,8 @@ RUN mkdir -p /sd.cpp/bin \
 
 WORKDIR /app
 
-COPY server.js index.html ./
+COPY server.js ./
+COPY public ./public
 COPY scripts ./scripts
 
 ENV HOST=0.0.0.0 \

@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>SD UI — Wan 1.3B</title>
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<header>
+  <div class="header-left">
+    <button id="menuBtn" class="menu-btn" type="button" aria-label="Buka menu" aria-expanded="false" aria-controls="sidebar">
+      <span></span><span></span><span></span>
+    </button>
+    <div>
+      <h1>Wan 1.3B <span>· CPU</span></h1>
+      <p>stable-diffusion.cpp · realtime</p>
+    </div>
+  </div>
+  <span id="conn" class="pill">connecting</span>
+</header>
+<div id="sidebarOverlay" class="sidebar-overlay" hidden></div>
+<aside id="sidebar" class="sidebar" aria-label="Navigasi" aria-hidden="true">
+  <div class="sidebar-head">
+    <div class="sidebar-brand">
+      <span class="sidebar-mark">SD</span>
+      <div>
+        <p class="sidebar-title">Wan 1.3B</p>
+        <p class="sidebar-sub">Studio UI</p>
+      </div>
+    </div>
+    <button id="sidebarClose" class="sidebar-close" type="button" aria-label="Tutup menu">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+    </button>
+  </div>
+  <nav class="side-nav" aria-label="Halaman">
+    <button type="button" class="side-link active" data-page="generate">
+      <span class="side-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><path d="M17 13v8m-4-4h8"/></svg></span>
+      <span class="side-copy"><span class="side-link-title">Generator</span><span class="side-link-sub">Prompt, preset, outfit</span></span>
+    </button>
+    <button type="button" class="side-link" data-page="results">
+      <span class="side-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="14" rx="3"/><path d="M8 20h8M9 10l2 2 4-4"/></svg></span>
+      <span class="side-copy"><span class="side-link-title">Hasil</span><span class="side-link-sub" id="sideResultCount">0 file</span></span>
+    </button>
+  </nav>
+  <div class="sidebar-foot">
+    <p id="sidebarStatus" class="sidebar-status"><span class="status-dot"></span><span>Connecting</span></p>
+  </div>
+</aside>
+<main class="layout">
+  <section class="surface page-panel" id="pageGenerate">
+    <div class="section-head">
+      <div>
+        <h2>Generate</h2>
+        <p class="sub">Wan 2.1 T2V · Q4_K_M</p>
+      </div>
+      <span id="clock" class="clock">—</span>
+    </div>
+    <form id="genForm" class="gen-form">
+      <div class="gen-group">
+        <div class="control-bar">
+          <div>
+            <span class="control-label">Jenis</span>
+            <div class="mode three" role="group" aria-label="Mode generate">
+              <button type="button" id="modeImage" class="active" aria-pressed="true">Gambar</button>
+              <button type="button" id="modeVideo" aria-pressed="false">Video</button>
+              <button type="button" id="modeOutfit" aria-pressed="false">Outfit</button>
+            </div>
+          </div>
+          <div id="configGroup">
+            <span class="control-label">Konfigurasi</span>
+            <div class="mode" role="group" aria-label="Sumber konfigurasi">
+              <button type="button" id="configPreset" class="active" aria-pressed="true">Preset</button>
+              <button type="button" id="configManual" aria-pressed="false">Manual</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="gen-group" id="promptGroup">
+        <label for="prompt" class="prompt-label">Prompt</label>
+        <textarea id="prompt" maxlength="500" spellcheck="false">a lovely cat walking in neon rain, cinematic lighting, shallow depth of field</textarea>
+      </div>
+      <div class="gen-group" id="outfitPanel" hidden>
+        <div class="outfit-grid">
+          <div class="wide">
+            <label for="outfitImage">Foto karakter</label>
+            <input id="outfitImage" type="file" accept="image/png,image/jpeg,image/webp">
+            <small>PNG, JPG, atau WEBP maksimal 16MB. Wajah dan bentuk tubuh akan dipertahankan.</small>
+          </div>
+          <div class="wide">
+            <label for="outfitPrompt">Prompt outfit</label>
+            <textarea id="outfitPrompt" maxlength="500" spellcheck="false">same person, futuristic streetwear jacket, detailed fabric, natural pose, consistent face and body, cinematic lighting</textarea>
+          </div>
+          <div>
+            <label for="outfitStrength">Kekuatan ubah baju</label>
+            <input id="outfitStrength" type="range" min="0.3" max="1" step="0.05" value="0.95">
+            <small>Makin tinggi makin bebas mengganti outfit.</small>
+          </div>
+          <div>
+            <label for="outfitNegative">Negative prompt</label>
+            <input id="outfitNegative" maxlength="500" value="blurry, low quality, watermark, text, deformed body, extra limbs">
+          </div>
+          <div>
+            <label for="outfitWidth">Lebar</label>
+            <input id="outfitWidth" type="number" min="256" max="1024" step="16" value="512">
+          </div>
+          <div>
+            <label for="outfitHeight">Tinggi</label>
+            <input id="outfitHeight" type="number" min="256" max="1024" step="16" value="640">
+          </div>
+          <div>
+            <label for="outfitSteps">Steps</label>
+            <input id="outfitSteps" type="number" min="1" max="50" value="20">
+          </div>
+          <div>
+            <label for="outfitCfg">CFG</label>
+            <input id="outfitCfg" type="number" min="0" max="20" step="0.5" value="6">
+          </div>
+          <div class="wide">
+            <span class="control-label">Area baju (mask)</span>
+            <div class="mask-grid">
+              <div>
+                <label for="maskLeft">Kiri %</label>
+                <input id="maskLeft" type="number" min="0" max="90" value="25">
+              </div>
+              <div>
+                <label for="maskTop">Atas %</label>
+                <input id="maskTop" type="number" min="0" max="90" value="30">
+              </div>
+              <div>
+                <label for="maskRight">Kanan %</label>
+                <input id="maskRight" type="number" min="5" max="100" value="75">
+              </div>
+              <div>
+                <label for="maskBottom">Bawah %</label>
+                <input id="maskBottom" type="number" min="5" max="100" value="95">
+              </div>
+            </div>
+            <small>Area putih akan diganti model; area hitam dipertahankan. Sesuaikan sampai menutup pakaian tanpa wajah atau tangan.</small>
+          </div>
+        </div>
+      </div>
+      <div class="gen-group" id="presetPanel">
+        <div class="preset" id="presetRow">
+          <div>
+            <label for="presetDuration">Durasi video</label>
+            <select id="presetDuration">
+              <option value="">Pilih durasi</option>
+            </select>
+          </div>
+          <div>
+            <label for="presetQuality">Kualitas <span class="tip" title="Preset mengisi steps dan CFG. Ukuran bisa ikut kualitas, dipilih dari list, atau diinput manual.">i</span></label>
+            <select id="presetQuality">
+              <option value="">Pilih kualitas</option>
+            </select>
+          </div>
+          <div>
+            <span class="control-label">Orientasi</span>
+            <div class="mode compact" role="group" aria-label="Orientasi gambar">
+              <button type="button" id="orientLandscape" class="active" aria-pressed="true">Lanskap</button>
+              <button type="button" id="orientPortrait" aria-pressed="false">Potret</button>
+            </div>
+          </div>
+          <div>
+            <label for="presetSizeSelect">Ukuran <span class="tip" title="Pilih ukuran dari list, ikut kualitas, atau Manual untuk mengisi lebar dan tinggi sendiri.">i</span></label>
+            <select id="presetSizeSelect">
+              <option value="auto">Ikut kualitas</option>
+            </select>
+          </div>
+          <div id="customSize" class="wide" hidden>
+            <div class="custom-size">
+              <div>
+                <label for="presetWidth">Lebar</label>
+                <input id="presetWidth" type="number" min="256" max="1024" step="16" value="512">
+              </div>
+              <div>
+                <label for="presetHeight">Tinggi</label>
+                <input id="presetHeight" type="number" min="256" max="1024" step="16" value="320">
+              </div>
+            </div>
+          </div>
+        </div>
+        <small id="presetHint">Pilih durasi + kualitas untuk mengisi config otomatis.</small>
+      </div>
+      <div class="gen-group" id="manualPanel" hidden>
+        <div class="quick">
+          <div>
+            <label for="frames">Frames</label>
+            <input id="frames" type="number" min="1" max="961" value="1">
+            <small>1 = PNG, &gt;1 = video</small>
+          </div>
+          <div>
+            <label for="steps">Steps <span class="tip" title="Jumlah koreksi denoising. 4=cepat, 10=seimbang, 20=lebih detail tapi lebih lama di CPU.">i</span></label>
+            <input id="steps" type="number" min="1" max="50" value="10">
+            <small>CPU: 4–10 cukup</small>
+          </div>
+        </div>
+        <details id="advanced">
+          <summary>Pengaturan lanjutan</summary>
+          <div class="adv">
+            <div>
+              <label for="cfg">CFG <span class="tip" title="Seberapa kuat model mengikuti prompt. 6 = default aman; terlalu rendah prompt mudah diabaikan, terlalu tinggi bisa kaku atau berantakan.">i</span></label>
+              <input id="cfg" type="number" min="0" max="20" step="0.5" value="6">
+            </div>
+            <div>
+              <label for="sampler">Sampler <span class="tip" title="Metode langkah denoising. euler dipakai karena cepat dan stabil di CPU; saat ini nilai ini dikunci.">i</span></label>
+              <input id="sampler" value="euler" disabled>
+            </div>
+            <div>
+              <label for="width">Width</label>
+              <input id="width" type="number" min="256" max="1024" step="16" value="512">
+            </div>
+            <div>
+              <label for="height">Height</label>
+              <input id="height" type="number" min="256" max="1024" step="16" value="320">
+            </div>
+            <div class="wide">
+              <label for="negative">Negative prompt <span class="tip" title="Hal yang ingin dihindari, misalnya blur, watermark, atau teks. Bukan pengganti prompt utama; terlalu panjang bisa mengganggu hasil.">i</span></label>
+              <input id="negative" maxlength="500" value="blurry, low quality, watermark, text">
+            </div>
+          </div>
+        </details>
+      </div>
+      <button id="genBtn" class="primary" type="submit">Generate Gambar</button>
+    </form>
+    <div class="guide-trigger">
+      <button id="guideBtn" class="guide-btn" type="button">Panduan cepat <span class="tip" title="Penjelasan steps, pipeline, CFG, sampler, dan negative prompt.">i</span></button>
+    </div>
+    <div class="status">
+      <span id="jobStatus" class="badge">idle</span>
+      <span id="jobMeta">siap</span>
+      <span id="eta" class="eta" hidden></span>
+      <button id="stopBtn" class="stop" type="button" hidden>Stop</button>
+    </div>
+    <div class="track"><div id="barFill"></div></div>
+    <div class="pipeline" id="pipeline">
+      <div class="pipeline-head"><span>Pipeline pemrosesan <span class="tip" title="Urutan kerja dari prompt teks sampai file akhir. Arahkan kursor ke tiap tahap untuk detail modelnya.">i</span></span><span id="pipelineStage">menunggu job</span></div>
+      <ol class="pipeline-steps" id="pipelineSteps"></ol>
+    </div>
+    <pre id="log" class="log">Menunggu event...</pre>
+  </section>
+  </section>
+  <section class="content page-panel" id="pageResults">
+    <div class="gallery-head">
+      <div>
+        <h2>Hasil</h2>
+        <p id="fileCount" class="sub">0 file</p>
+      </div>
+      <div class="filters">
+        <button class="chip active" data-filter="all">Semua</button>
+        <button class="chip" data-filter="image">Gambar</button>
+        <button class="chip" data-filter="video">Video</button>
+      </div>
+    </div>
+    <div id="gallery" class="gallery"></div>
+    <p id="empty" class="empty" hidden>Belum ada hasil.</p>
+    <div id="pagination" class="pagination" hidden>
+      <button id="prevPage" class="page-btn" type="button">← Prev</button>
+      <span id="pageInfo">1 / 1</span>
+      <button id="nextPage" class="page-btn" type="button">Next →</button>
+    </div>
+  </section>
+</main>
+<dialog id="guideModal" class="guide-modal" aria-labelledby="guideTitle">
+  <button id="guideClose" class="lightbox-close" type="button" aria-label="Tutup">×</button>
+  <h2 id="guideTitle">Panduan cepat</h2>
+  <h3>Steps = jumlah koreksi</h3>
+  <p><strong>Steps</strong> adalah jumlah pengulangan koreksi. Kalau <code>steps=20</code>, model mengoreksi hasilnya sekitar <strong>20 kali</strong> sebelum gambar/video selesai.</p>
+  <p>Makin tinggi steps biasanya makin rapi detailnya, tapi makin lama. Makin rendah makin cepat, tapi bisa blur atau kurang cocok dengan prompt. Rekomendasi CPU: <code>4</code> coba cepat, <code>10</code> seimbang, <code>20</code> detail lebih halus.</p>
+  <h3>Urutan pipeline</h3>
+  <ol>
+    <li><strong>Input &amp; config</strong>: prompt, steps, dan ukuran dikirim ke server.</li>
+    <li><strong>Text encoder</strong> <code>umt5-xxl-encoder-Q3_K_S.gguf</code>: teks jadi conditioning.</li>
+    <li><strong>Diffusion sampling</strong> <code>wan2.1_t2v_1.3b-q4_k_m.gguf</code>: koreksi latent sebanyak steps.</li>
+    <li><strong>VAE decode</strong> <code>taew2_1.safetensors</code>: latent jadi piksel/frame.</li>
+    <li><strong>Video encode</strong> <code>ffmpeg</code>: AVI jadi MP4; dilewati untuk mode Gambar.</li>
+    <li><strong>Output &amp; meta</strong> <code>/root/out</code>: file dan detail masuk galeri.</li>
+  </ol>
+  <h3>Ukuran &amp; orientasi</h3>
+  <p>Di mode Preset, ukuran bisa <strong>Ikut kualitas</strong>, dipilih dari list, atau <strong>Manual</strong>. <strong>Lanskap</strong> melebar, <strong>Potret</strong> memutar ukuran yang sama. Manual memakai lebar &times; tinggi sendiri; keduanya harus 256–1024 px dan kelipatan 16.</p>
+  <h3>Kontrol manual</h3>
+  <p><strong>CFG</strong> mengatur seberapa keras model menuruti prompt. <code>6</code> sudah seimbang; terlalu rendah prompt mudah diabaikan, terlalu tinggi hasil bisa kaku atau berantakan.</p>
+  <p><strong>Sampler</strong> adalah metode denoising. UI memakai <code>euler</code> karena cepat dan stabil di CPU, jadi kolomnya dikunci.</p>
+  <p><strong>Negative prompt</strong> berisi hal yang ingin dihindari, misalnya <code>blur</code>, <code>watermark</code>, atau <code>text</code>. Ini pelengkap prompt utama, bukan pengganti, dan sebaiknya tidak terlalu panjang.</p>
+</dialog>
+<dialog id="lightbox" class="lightbox">
+  <button id="lightboxClose" class="lightbox-close" type="button" aria-label="Tutup">×</button>
+  <div class="lightbox-stage">
+    <button id="lightboxPrev" class="lightbox-nav prev" type="button" aria-label="Sebelumnya">‹</button>
+    <div id="lightboxMedia" class="lightbox-media"></div>
+    <button id="lightboxNext" class="lightbox-nav next" type="button" aria-label="Berikutnya">›</button>
+    <div id="zoomControls" class="lightbox-zoom" role="group" aria-label="Zoom gambar" hidden>
+      <button id="zoomOut" type="button" aria-label="Perkecil">−</button>
+      <span id="zoomLevel">100%</span>
+      <button id="zoomIn" type="button" aria-label="Perbesar">+</button>
+    </div>
+  </div>
+  <p id="lightboxCaption" class="lightbox-caption"></p>
+  <div id="lightboxDetails" class="lightbox-details"></div>
+</dialog>
+<script src="/app.js"></script>
+</body>
+</html>
