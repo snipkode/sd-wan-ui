@@ -94,7 +94,10 @@ body.sidebar-open .sidebar-overlay { opacity: 1; pointer-events: auto; }
 .page-panel[hidden] { display: none !important; }
 
 .account-card { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 16px; background: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.03)); border: 1px solid rgba(255,255,255,.08); }
-.account-avatar { width: 44px; height: 44px; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; color: #c7c7cc; background: linear-gradient(145deg, rgba(99,99,102,.45), rgba(58,58,60,.35)); border: 1px solid rgba(255,255,255,.08); flex: none; }
+.account-avatar { width: 44px; height: 44px; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; color: #c7c7cc; background: linear-gradient(145deg, rgba(99,99,102,.45), rgba(58,58,60,.35)); border: 1px solid rgba(255,255,255,.08); flex: none; position: relative; overflow: hidden; }
+.account-avatar::after { content: ""; position: absolute; inset: -40%; background: linear-gradient(110deg, transparent 30%, rgba(255,255,255,.22) 45%, transparent 60%); transform: translateX(-120%); animation: account-shimmer 2.8s ease-in-out infinite; pointer-events: none; }
+@keyframes account-shimmer { 100% { transform: translateX(120%); } }
+@media (prefers-reduced-motion: reduce) { .account-avatar::after { animation: none; } }
 .account-avatar svg { width: 22px; height: 22px; }
 .account-body { min-width: 0; flex: 1; }
 .account-row { display: flex; align-items: center; gap: 8px; }
@@ -216,6 +219,9 @@ button {
 }
 .primary:active { transform: scale(.985); }
 .primary:disabled { opacity: .55; cursor: not-allowed; box-shadow: none; }
+.primary.loading { position: relative; overflow: hidden; color: rgba(255,255,255,.92); }
+.primary.loading::after { content: ""; position: absolute; inset: 0; background: linear-gradient(110deg, transparent 20%, rgba(255,255,255,.28) 45%, transparent 70%); transform: translateX(-120%); animation: ui-shimmer 1.4s linear infinite; }
+@keyframes ui-shimmer { 100% { transform: translateX(120%); } }
 .mode { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 4px; border: 1px solid rgba(255, 255, 255, .06); border-radius: 14px; background: rgba(118, 118, 128, .16); }
 .mode.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .mode button { min-height: 36px; border-radius: 10px; color: var(--muted); background: transparent; font-size: 13px; font-weight: 600; transition: background .18s ease, color .18s ease; }
@@ -281,6 +287,9 @@ button {
 .guide-trigger { margin-top: 10px; }
 .guide-btn { min-height: 30px; padding: 0 12px; border: 1px solid var(--stroke); border-radius: 999px; color: var(--text); background: rgba(255, 255, 255, .08); font-size: 11px; font-weight: 650; cursor: pointer; }
 .guide-btn:hover { background: rgba(255, 255, 255, .14); }
+.lightbox-actions { display: flex; gap: 10px; margin-top: 12px; }
+.lightbox-actions .guide-btn, .lightbox-actions .primary { width: auto; flex: 1; margin-top: 0; min-height: 40px; font-size: 13px; }
+#retryBtn { min-height: 30px; padding: 0 12px; font-size: 11px; }
 .guide-modal { position: fixed; inset: 0; width: min(calc(100vw - 24px), 620px); max-height: min(82vh, 560px); margin: auto; overflow: auto; padding: 18px; color: var(--text); background: rgba(10, 10, 12, .97); border: 1px solid var(--stroke); border-radius: 16px; box-shadow: 0 24px 80px rgba(0, 0, 0, .7); }
 .guide-modal::backdrop { background: rgba(0, 0, 0, .78); backdrop-filter: blur(6px); }
 .guide-modal h2 { margin: 0 36px 12px 0; font-size: 18px; }
@@ -554,3 +563,13 @@ button {
   .outfit-grid .wide, .adv .wide { grid-column: auto; }
   .filters { width: 100%; }
 }
+
+.skeleton-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.skeleton-card { border-radius: 14px; overflow: hidden; background: rgba(44,44,46,.45); border: 1px solid rgba(255,255,255,.06); }
+.skeleton-media, .skeleton-line { position: relative; overflow: hidden; background: rgba(255,255,255,.06); }
+.skeleton-media { height: 112px; }
+.skeleton-meta { padding: 10px; display: grid; gap: 8px; }
+.skeleton-line { height: 10px; border-radius: 999px; }
+.skeleton-line.short { width: 55%; }
+.skeleton-media::after, .skeleton-line::after { content: ""; position: absolute; inset: 0; background: linear-gradient(110deg, transparent 20%, rgba(255,255,255,.14) 45%, transparent 70%); transform: translateX(-120%); animation: ui-shimmer 1.5s linear infinite; }
+@media (min-width: 900px) { .skeleton-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); } .skeleton-media { height: 140px; } }

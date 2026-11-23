@@ -8,6 +8,7 @@ const jobMeta = $('jobMeta');
 const eta = $('eta');
 const genBtn = $('genBtn');
 const stopBtn = $('stopBtn');
+const retryBtn = $('retryBtn');
 const barFill = $('barFill');
 const fileCount = $('fileCount');
 const clock = $('clock');
@@ -42,6 +43,8 @@ const lightboxDetails = $('lightboxDetails');
 const lightboxClose = $('lightboxClose');
 const lightboxPrev = $('lightboxPrev');
 const lightboxNext = $('lightboxNext');
+const lightboxUsePrompt = $('lightboxUsePrompt');
+const lightboxRegenerate = $('lightboxRegenerate');
 const zoomControls = $('zoomControls');
 const zoomIn = $('zoomIn');
 const zoomOut = $('zoomOut');
@@ -419,7 +422,9 @@ function renderJob(job) {
     eta.hidden = true;
     genBtn.disabled = false;
     genBtn.textContent = genLabel;
+    genBtn.classList.toggle('loading', false);
     stopBtn.hidden = true;
+    retryBtn.hidden = true;
     return;
   }
   const busy = ACTIVE_STATUSES.includes(job.status);
@@ -437,9 +442,12 @@ function renderJob(job) {
   renderProgress(job.progress || { percent: 0 });
   genBtn.disabled = busy;
   genBtn.textContent = busy ? 'Generating…' : genLabel;
+  genBtn.classList.toggle('loading', busy);
   stopBtn.hidden = !busy;
   stopBtn.disabled = job.status === 'stopping';
   stopBtn.textContent = job.status === 'stopping' ? 'Stopping…' : 'Stop';
+  retryBtn.hidden = busy || !job.canRetry || job.status === 'done';
+  retryBtn.disabled = busy;
 }
 
 function renderCounts(counts) {
@@ -594,6 +602,16 @@ function renderLightbox() {
   applyLightboxZoom();
   lightboxCaption.textContent = `${f.name} · ${fmt(f.size)}`;
   renderDetails(f.meta);
+  const meta = f.meta;
+  const canRegen = Boolean(meta && (meta.kind === 'outfit' || meta.prompt || meta.frames));
+  lightboxRegenerate.hidden = !canRegen;
+  lightboxRegenerate.disabled = !canRegen;
+  lightboxUsePrompt.hidden = !meta;
+  if (meta && meta.kind === 'outfit' && (!meta.source || !meta.mask)) {
+    lightboxRegenerate.title = 'Source/mask outfit mungkin tidak tersedia; gunakan Edit prompt lalu upload ulang jika perlu';
+  } else {
+    lightboxRegenerate.title = 'Regenerate dengan metadata yang sama';
+  }
 }
 
 function showLightbox(index) {
@@ -686,6 +704,22 @@ async function deleteAssetFile(name) {
   }
 }
 
+function renderGallerySkeleton(count = 6) {
+  gallery.innerHTML = '';
+  const wrap = document.createElement('div');
+  wrap.className = 'skeleton-grid';
+  wrap.setAttribute('aria-hidden', 'true');
+  for (let i = 0; i < count; i++) {
+    const card = document.createElement('div');
+    card.className = 'skeleton-card';
+    card.innerHTML = '<div class="skeleton-media"></div><div class="skeleton-meta"><div class="skeleton-line"></div><div class="skeleton-line short"></div></div>';
+    wrap.appendChild(card);
+  }
+  gallery.appendChild(wrap);
+  empty.hidden = true;
+  pagination.hidden = true;
+}
+
 async function loadFiles(targetPage = currentPage) {
   if (galleryLoading) {
     galleryPending = true;
@@ -694,6 +728,7 @@ async function loadFiles(targetPage = currentPage) {
   galleryLoading = true;
   prevPage.disabled = true;
   nextPage.disabled = true;
+  if (gallery.children.length === 0) renderGallerySkeleton();
   try {
     const params = new URLSearchParams({ page: String(targetPage), limit: String(PAGE_SIZE), type: activeFilter });
     const response = await fetch(`/api/files?${params}`);
@@ -707,8 +742,11 @@ async function loadFiles(targetPage = currentPage) {
     prevPage.disabled = !data.hasPrev;
     nextPage.disabled = !data.hasNext;
   } catch (err) {
-    empty.hidden = false;
-    empty.textContent = `Gagal memuat hasil: ${err.message}`;
+    if (!gallery.querySelector('.card')) {
+      gallery.innerHTML = '';
+      empty.hidden = false;
+      empty.textContent = `Gagal memuat hasil: ${err.message}`;
+    }
   } finally {
     galleryLoading = false;
     if (galleryPending) {
@@ -753,6 +791,16 @@ presetHeight.addEventListener('input', applyPreset);
 orientLandscape.addEventListener('click', () => setOrientation('landscape'));
 orientPortrait.addEventListener('click', () => setOrientation('portrait'));
 $('frames').addEventListener('input', () => updatePipeline(currentJob));
+retryBtn.addEventListener('click', retryCurrentJob);
+lightboxUsePrompt.addEventListener('click', () => {
+  const f = galleryFiles[lightboxIndex];
+  if (!f || !f.meta) return;
+  applyMetaToForm(f.meta);
+  lightbox.close();
+  showPage('generate');
+  pushLog(`prompt dimuat dari ${f.name}`);
+});
+lightboxRegenerate.addEventListener('click', regenerateFromLightbox);
 refreshSizeOptions();
 setConfigMode('preset');
 setMode('image');
@@ -766,6 +814,72 @@ async function applyStartResponse(response) {
   logReady = false;
   pushLog(`job ${data.job.id} dimulai · ${data.job.output}`);
   renderJob(data.job);
+}
+
+function applyMetaToForm(meta) {
+  if (!meta || typeof meta !== 'object') return false;
+  const kind = meta.kind === 'outfit' ? 'outfit' : (meta.frames > 1 ? 'video' : 'image');
+  if (kind === 'outfit') {
+    setMode('outfit');
+    $('outfitPrompt').value = meta.prompt || '';
+    $('outfitNegative').value = meta.negative || '';
+    $('outfitSteps').value = meta.steps || 20;
+    $('outfitWidth').value = meta.width || 512;
+    $('outfitHeight').value = meta.height || 640;
+    $('outfitCfg').value = meta.cfg ?? 6;
+    $('outfitStrength').value = meta.strength ?? 0.95;
+    if (meta.maskBox) {
+      $('maskLeft').value = meta.maskBox.left ?? 25;
+      $('maskTop').value = meta.maskBox.top ?? 30;
+      $('maskRight').value = meta.maskBox.right ?? 75;
+      $('maskBottom').value = meta.maskBox.bottom ?? 95;
+    }
+    return true;
+  }
+  setMode(kind);
+  setConfigMode('manual');
+  $('prompt').value = meta.prompt || '';
+  $('negative').value = meta.negative || '';
+  $('frames').value = kind === 'video' ? Math.max(2, meta.frames || 9) : 1;
+  $('steps').value = meta.steps || 10;
+  $('width').value = meta.width || 512;
+  $('height').value = meta.height || 320;
+  $('cfg').value = meta.cfg ?? 6;
+  renderPipelineShell();
+  return true;
+}
+
+async function retryCurrentJob() {
+  retryBtn.disabled = true;
+  try {
+    const response = await fetch('/api/retry', { method: 'POST' });
+    await applyStartResponse(response);
+  } catch (err) {
+    pushLog(`ERROR: ${err.message}`);
+    alert(err.message);
+  } finally {
+    retryBtn.disabled = false;
+  }
+}
+
+async function regenerateFromLightbox() {
+  const f = galleryFiles[lightboxIndex];
+  if (!f) return;
+  lightboxRegenerate.disabled = true;
+  try {
+    const response = await fetch('/api/regenerate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: f.name })
+    });
+    await applyStartResponse(response);
+    lightbox.close();
+  } catch (err) {
+    pushLog(`ERROR: ${err.message}`);
+    alert(err.message);
+  } finally {
+    lightboxRegenerate.disabled = false;
+  }
 }
 
 async function submitOutfit() {

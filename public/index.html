@@ -243,6 +243,7 @@
       <span id="jobStatus" class="badge">idle</span>
       <span id="jobMeta">siap</span>
       <span id="eta" class="eta" hidden></span>
+      <button id="retryBtn" class="stop" type="button" hidden>Retry</button>
       <button id="stopBtn" class="stop" type="button" hidden>Stop</button>
     </div>
     <div class="track"><div id="barFill"></div></div>
@@ -310,6 +311,10 @@
   </div>
   <p id="lightboxCaption" class="lightbox-caption"></p>
   <div id="lightboxDetails" class="lightbox-details"></div>
+  <div class="lightbox-actions">
+    <button id="lightboxUsePrompt" class="guide-btn" type="button">Edit prompt</button>
+    <button id="lightboxRegenerate" class="primary" type="button">Regenerate</button>
+  </div>
 </dialog>
 <script src="/app.js"></script>
 </body>

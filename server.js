@@ -384,7 +384,8 @@ function publicJob() {
     strength: job.strength || null,
     error: job.error,
     warning: job.warning,
-    cancelled: Boolean(job.cancelled)
+    cancelled: Boolean(job.cancelled),
+    canRetry: Boolean(job.config) && !ACTIVE_JOB_STATUSES.includes(job.status)
   };
 }
 
@@ -410,6 +411,7 @@ function loadState() {
         j.finishedAt = j.finishedAt || now();
       }
       if (j.exitCode === 137 && /^(docker|sd-cli) exit 137/.test(String(j.error || ''))) j.error = oomError();
+      j.config = j.config && typeof j.config === 'object' ? j.config : null;
       job = j;
     }
   } catch {
@@ -419,7 +421,8 @@ function loadState() {
 
 function saveState() {
   try {
-    const payload = JSON.stringify({ seq, job: job ? publicJob() : null }, null, 2);
+    const persisted = job ? { ...publicJob(), config: job.config || null } : null;
+    const payload = JSON.stringify({ seq, job: persisted }, null, 2);
     fs.writeFileSync(`${STATE_FILE}.tmp`, payload);
     fs.renameSync(`${STATE_FILE}.tmp`, STATE_FILE);
   } catch (err) {
@@ -613,7 +616,8 @@ function startInpaintJob(config, prepared) {
     warning: null,
     cancelled: false,
     proc: null,
-    container
+    container,
+    config: { kind: 'outfit', prompt: config.prompt, negative: config.negative, steps: config.steps, width: config.width, height: config.height, cfg: config.cfg, strength: config.strength, mask: prepared.box, sourceName: prepared.sourceName, maskName: prepared.maskName }
   };
   saveState();
 
@@ -745,7 +749,8 @@ function startJob(config) {
     warning: null,
     cancelled: false,
     proc: null,
-    container
+    container,
+    config: { kind: 'generate', prompt: config.prompt, negative: config.negative, frames: config.frames, steps: config.steps, width: config.width, height: config.height, cfg: config.cfg }
   };
   saveState();
 
@@ -1037,6 +1042,81 @@ async function handleOutfit(req, res) {
   return send(res, 200, { job: created });
 }
 
+async function handleRetry(req, res) {
+  if (rateLimited(req)) return send(res, 429, { error: 'terlalu banyak request, coba lagi sebentar' });
+  if (job && ACTIVE_JOB_STATUSES.includes(job.status)) {
+    return send(res, 409, { error: 'inference masih berjalan', job: publicJob() });
+  }
+  const cfg = job && job.config;
+  if (!cfg || !cfg.kind) return send(res, 409, { error: 'tidak ada job untuk di-retry' });
+  if (cfg.kind === 'outfit') {
+    const sourcePath = path.join(INPUT_DIR, String(cfg.sourceName || ''));
+    const maskPath = path.join(INPUT_DIR, String(cfg.maskName || ''));
+    if (!safeName(cfg.sourceName) || !safeName(cfg.maskName) || !fs.existsSync(sourcePath) || !fs.existsSync(maskPath)) {
+      return send(res, 409, { error: 'file source/mask outfit tidak tersedia, upload ulang dari form outfit' });
+    }
+    const modelPath = path.join(RUNNER === 'local' ? INPAINT_MODEL_DIR : INPAINT_MODEL_HOST_DIR, INPAINT_MODEL_NAME);
+    if (!fs.existsSync(modelPath)) return send(res, 409, { error: `model inpainting belum tersedia: ${modelPath}` });
+    const prepared = { sourceName: cfg.sourceName, maskName: cfg.maskName, box: cfg.mask || { left: 25, top: 30, right: 75, bottom: 95 } };
+    const created = startInpaintJob({ prompt: cfg.prompt, negative: cfg.negative, steps: cfg.steps, width: cfg.width, height: cfg.height, cfg: cfg.cfg, strength: cfg.strength }, prepared);
+    return send(res, 200, { job: created });
+  }
+  const created = startJob({
+    prompt: String(cfg.prompt || '').slice(0, 500) || 'a lovely cat',
+    negative: String(cfg.negative || '').slice(0, 500),
+    frames: clampInt(cfg.frames, 1, MAX_FRAMES, 1),
+    steps: clampInt(cfg.steps, 1, 50, 10),
+    width: clampInt(cfg.width, 256, 1024, 512),
+    height: clampInt(cfg.height, 256, 1024, 320),
+    cfg: clampNum(cfg.cfg, 0, 20, 6)
+  });
+  return send(res, 200, { job: created });
+}
+
+async function handleRegenerate(req, res) {
+  if (rateLimited(req)) return send(res, 429, { error: 'terlalu banyak request, coba lagi sebentar' });
+  if (job && ACTIVE_JOB_STATUSES.includes(job.status)) {
+    return send(res, 409, { error: 'inference masih berjalan', job: publicJob() });
+  }
+  let body;
+  try { body = JSON.parse((await readBody(req)) || '{}'); } catch (err) {
+    return send(res, 400, { error: `invalid JSON: ${err.message}` });
+  }
+  const name = String(body.name || '');
+  if (!safeName(name)) return send(res, 400, { error: 'nama file tidak valid' });
+  const meta = readMeta(name);
+  if (!meta) return send(res, 404, { error: 'metadata tidak ditemukan untuk file ini' });
+  if (meta.kind === 'outfit') {
+    const sourceName = String(meta.source || '');
+    const maskName = String(meta.mask || '');
+    if (!safeName(sourceName) || !safeName(maskName) || !fs.existsSync(path.join(INPUT_DIR, sourceName)) || !fs.existsSync(path.join(INPUT_DIR, maskName))) {
+      return send(res, 409, { error: 'source/mask outfit asli tidak tersedia; upload ulang dari form outfit' });
+    }
+    const modelPath = path.join(RUNNER === 'local' ? INPAINT_MODEL_DIR : INPAINT_MODEL_HOST_DIR, INPAINT_MODEL_NAME);
+    if (!fs.existsSync(modelPath)) return send(res, 409, { error: `model inpainting belum tersedia: ${modelPath}` });
+    const created = startInpaintJob({
+      prompt: String(meta.prompt || '').slice(0, 500),
+      negative: String(meta.negative || '').slice(0, 500),
+      steps: clampInt(meta.steps, 1, 50, 20),
+      width: clampInt(meta.width, 256, 1024, 512),
+      height: clampInt(meta.height, 256, 1024, 640),
+      cfg: clampNum(meta.cfg, 0, 20, 6),
+      strength: clampNum(meta.strength, 0.3, 1, 0.95)
+    }, { sourceName, maskName, box: meta.maskBox || { left: 25, top: 30, right: 75, bottom: 95 } });
+    return send(res, 200, { job: created });
+  }
+  const created = startJob({
+    prompt: String(meta.prompt || '').slice(0, 500) || 'a lovely cat',
+    negative: String(meta.negative || '').slice(0, 500),
+    frames: clampInt(meta.frames, 1, MAX_FRAMES, 1),
+    steps: clampInt(meta.steps, 1, 50, 10),
+    width: clampInt(meta.width, 256, 1024, 512),
+    height: clampInt(meta.height, 256, 1024, 320),
+    cfg: clampNum(meta.cfg, 0, 20, 6)
+  });
+  return send(res, 200, { job: created });
+}
+
 function handleStream(req, res) {
   res.writeHead(200, {
     ...SEC_HEADERS,
@@ -1203,6 +1283,14 @@ const server = http.createServer(async (req, res) => {
     const stopped = cancelJob();
     if (!stopped) return send(res, 409, { error: 'tidak ada job aktif' });
     return send(res, 200, { job: stopped });
+  }
+  if (p === '/api/retry') {
+    if (req.method !== 'POST') return send(res, 405, { error: 'method not allowed' });
+    return handleRetry(req, res);
+  }
+  if (p === '/api/regenerate') {
+    if (req.method !== 'POST') return send(res, 405, { error: 'method not allowed' });
+    return handleRegenerate(req, res);
   }
   if (p === '/api/delete') {
     if (req.method !== 'POST') return send(res, 405, { error: 'method not allowed' });
