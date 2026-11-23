@@ -458,10 +458,13 @@ Salin `.env.example` menjadi `.env`, lalu sesuaikan:
 | `SD_IMAGE` | `sd-cpu:local` | Nama image Docker inference mode split |
 | `SD_RUNNER` | `docker` | `local` menjalankan `sd-cli` bundled; `docker` menjalankan container inference |
 | `SD_CLI_BIN` | `/sd.cpp/bin/sd-cli` | Path `sd-cli` saat `SD_RUNNER=local` |
-| `SD_BACKEND` | `cpu` | Backend `sd-cli`: `cpu`, `cuda`/`cuda0`, `vulkan`/`vulkan0`, atau module map seperti `clip=cpu,diffusion=cuda0` |
+| `SD_BACKEND` | `cpu` | Backend compute: `cpu`, `cuda`/`cuda0`, `vulkan`/`vulkan0`, `auto`, atau module map seperti `diffusion=vulkan0,clip=cpu` |
+| `SD_PARAMS_BACKEND` | kosong | Tempat bobot model disimpan: `disk`, `cpu`, atau module map. Kosong = ikut `SD_BACKEND` |
+| `SD_MAX_VRAM` | kosong | Batas memori GPU dalam GiB, misalnya `4` atau `vulkan0=4`. Kosong = tanpa batas eksplisit |
+| `SD_THREADS` | kosong | Jumlah thread CPU (`-t`) untuk backend `cpu`. Kosong = pemilihan otomatis pustaka |
 | `GPU_DEVICES` | `all` | Nilai `--gpus` Docker saat backend CUDA |
 | `VULKAN_DEVICE` | `/dev/dri` | Device Docker saat backend Vulkan/AMD/Intel |
-| `SD_EXTRA_ARGS` | kosong | Argumen CLI tambahan, misalnya `--max-vram 8` |
+| `SD_EXTRA_ARGS` | kosong | Argumen CLI tambahan, misalnya `--split-mode row` |
 | `FFMPEG_BIN` | `ffmpeg` | Path binary ffmpeg untuk konversi AVI → MP4 dan pembuatan source/mask outfit |
 | `KEEP_AVI` | `0` | Set `1` untuk menyimpan AVI asli setelah konversi |
 
@@ -476,11 +479,46 @@ Default `SD_BACKEND=cpu`, sehingga tidak ada flag GPU Docker yang ditambahkan. N
 | `cpu` | — | `--backend cpu` |
 | `cuda` / `cuda0` | `--gpus all` | `--backend cuda0` |
 | `vulkan` / `vulkan0` | `--device /dev/dri` | `--backend vulkan0` |
-| `clip=cpu,diffusion=cuda0` | `--gpus all` | diteruskan apa adanya |
+| `auto` | mengikuti device terdeteksi | `--backend <device>` hasil probe |
+| `diffusion=vulkan0,clip=cpu` | `--device /dev/dri` | diteruskan apa adanya |
 
-`GPU_DEVICES` mengubah nilai `--gpus` untuk NVIDIA, sedangkan `VULKAN_DEVICE` mengubah path device untuk AMD/Intel Vulkan. `SD_EXTRA_ARGS` diteruskan sebagai argumen CLI tanpa shell, sehingga aman untuk nilai seperti `--max-vram 8`.
+`GPU_DEVICES` mengubah nilai `--gpus` untuk NVIDIA, sedangkan `VULKAN_DEVICE` mengubah path device untuk AMD/Intel Vulkan. `SD_EXTRA_ARGS` diteruskan sebagai argumen CLI tanpa shell, sehingga aman untuk nilai seperti `--split-mode row`.
 
-Untuk memakai GPU nanti: siapkan image CUDA/Vulkan, set `SD_IMAGE=sd-gpu:local`, lalu set `SD_BACKEND=cuda0` atau `vulkan0`. Server tidak mendeteksi GPU secara otomatis; backend harus dipilih lewat env. Detail backend aktif bisa dilihat di `GET /api/health`.
+`auto` hanya berlaku pada `SD_RUNNER=local`: saat start server menjalankan `SD_CLI_BIN --list-devices` sekali, lalu memilih device `cuda*` pertama, atau `vulkan*` jika tidak ada CUDA, atau `cpu`. Pada `SD_RUNNER=docker` backend harus disebut eksplisit karena device di dalam container berbeda dari host. Backend aktif, sumbernya (`env`/`auto`), dan argumen yang dipakai bisa dilihat di `GET /api/health` serta di indikator jam pada UI.
+
+### Memilih compute agar efisien
+
+| Kondisi | Saran |
+| --- | --- |
+| CPU saja (default, tanpa GPU) | `SD_BACKEND=cpu`. Set `SD_THREADS` ke jumlah vCPU fisik; jangan lebih dari itu |
+| GPU dengan VRAM cukup | `SD_BACKEND=vulkan0` (AMD/Intel) atau `cuda0` (NVIDIA) untuk semua tahap |
+| GPU kecil / iGPU berbagi RAM | `SD_BACKEND=diffusion=vulkan0,vae=vulkan0,clip=cpu` — text encoder tetap di RAM, hanya denoise + TAEHV di GPU |
+| RAM ketat, GPU besar | `SD_PARAMS_BACKEND=disk` atau `SD_MAX_VRAM=6` agar bobot tidak menumpuk di VRAM |
+
+Untuk NVIDIA di Docker: `SD_IMAGE=sd-gpu:local SD_BACKEND=cuda0` (image harus berisi backend CUDA). Untuk AMD/Intel di Linux: image berisi backend Vulkan + `SD_BACKEND=vulkan0`, device `/dev/dri` diberikan otomatis.
+
+#### GPU native di Windows (Vulkan, tanpa Docker)
+
+Jalur ini dipakai saat GPU hanya tersedia untuk host Windows (iGPU Intel/AMD) sementara Docker tidak menerima device GPU:
+
+```bash
+gh release download master-1106-532d2c1 --repo leejet/stable-diffusion.cpp \
+  --pattern "sd-master-532d2c1-bin-win-vulkan-x64.zip"
+unzip sd-master-532d2c1-bin-win-vulkan-x64.zip -d sd-vulkan
+./sd-vulkan/sd-cli.exe --list-devices   # harus menampilkan Vulkan0
+```
+
+Lalu jalankan server dengan runner lokal:
+
+```bash
+SD_RUNNER=local \
+SD_CLI_BIN="$PWD/sd-vulkan/sd-cli.exe" \
+MODEL_DIR="$PWD/models" OUT_DIR="$PWD/out" \
+SD_BACKEND=auto \
+node server.js
+```
+
+Hasil uji di mesin ini (Intel Iris Xe, 512x320, 10 step, 1 frame): **GPU Vulkan 90 detik** (sampling 61.9 detik) vs **CPU 8 vCPU 204 detik** (sampling 144.7 detik) — sekitar 2,3x lebih cepat. Untuk 5 frame/10 step, GPU butuh 175 detik. Karena memori GPU berbagi dengan RAM, naikkan frame/resolusi bertahap dan pantau `MemAvailable`.
 
 ## Menjalankan dengan Docker
 

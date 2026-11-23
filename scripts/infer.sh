@@ -14,6 +14,9 @@ MODEL_DIR="${MODEL_DIR:-/root/models/wan}"
 OUT_DIR="${OUT_DIR:-/root/out}"
 SD_IMAGE="${SD_IMAGE:-sd-cpu:local}"
 BACKEND="${SD_BACKEND:-cpu}"
+PARAMS_BACKEND="${SD_PARAMS_BACKEND:-}"
+MAX_VRAM="${SD_MAX_VRAM:-}"
+CPU_THREADS="${SD_THREADS:-}"
 GPU_DEVICES="${GPU_DEVICES:-all}"
 VULKAN_DEVICE="${VULKAN_DEVICE:-/dev/dri}"
 FFMPEG_BIN="${FFMPEG_BIN:-ffmpeg}"
@@ -26,8 +29,12 @@ if [[ "$BACKEND" == "cuda" ]]; then BACKEND="cuda0"; fi
 if [[ "$BACKEND" == "vulkan" ]]; then BACKEND="vulkan0"; fi
 
 gpu_args=()
-if [[ "$BACKEND" == *cuda* ]]; then gpu_args+=(--gpus "$GPU_DEVICES"); fi
-if [[ "$BACKEND" == *vulkan* ]]; then gpu_args+=(--device "$VULKAN_DEVICE"); fi
+if [[ "$BACKEND" == *cuda* || "$PARAMS_BACKEND" == *cuda* ]]; then gpu_args+=(--gpus "$GPU_DEVICES"); fi
+if [[ "$BACKEND" == *vulkan* || "$PARAMS_BACKEND" == *vulkan* ]]; then gpu_args+=(--device "$VULKAN_DEVICE"); fi
+backend_args=(--backend "$BACKEND")
+if [[ -n "$PARAMS_BACKEND" ]]; then backend_args+=(--params-backend "$PARAMS_BACKEND"); fi
+if [[ -n "$MAX_VRAM" ]]; then backend_args+=(--max-vram "$MAX_VRAM"); fi
+if [[ -n "$CPU_THREADS" ]]; then backend_args+=(-t "$CPU_THREADS"); fi
 read -r -a extra_args <<< "$SD_EXTRA_ARGS"
 
 if [[ "$FRAMES" -gt 1 ]]; then
@@ -42,7 +49,7 @@ docker run --rm "${gpu_args[@]}" \
     -v "$MODEL_DIR:/models:ro" \
     -v "$OUT_DIR:/output" \
     "$SD_IMAGE" \
-    --backend "$BACKEND" \
+    "${backend_args[@]}" \
     -M vid_gen \
     --diffusion-model /models/wan2.1_t2v_1.3b-q4_k_m.gguf \
     --t5xxl /models/umt5-xxl-encoder-Q3_K_S.gguf \
