@@ -508,14 +508,21 @@ unzip sd-master-532d2c1-bin-win-vulkan-x64.zip -d sd-vulkan
 ./sd-vulkan/sd-cli.exe --list-devices   # harus menampilkan Vulkan0
 ```
 
-Lalu jalankan server dengan runner lokal:
+Lalu jalankan UI dengan runner lokal memakai satu skrip. Skrip mencari `sd-cli` di `sd-vulkan/sd-cli.exe`, memilih backend `auto`, dan memakai ffmpeg dari `PATH` atau `tools/ffmpeg/bin/ffmpeg.exe`:
 
 ```bash
-SD_RUNNER=local \
-SD_CLI_BIN="$PWD/sd-vulkan/sd-cli.exe" \
-MODEL_DIR="$PWD/models" OUT_DIR="$PWD/out" \
-SD_BACKEND=auto \
-node server.js
+./scripts/start-gpu-native.sh
+```
+
+Override lewat env bila lokasi berbeda, misalnya `SD_CLI_BIN=/path/sd-cli.exe SD_BACKEND=vulkan0 PORT=3002 ./scripts/start-gpu-native.sh`. Folder `sd-vulkan/`, `tools/`, dan `runtime/` sudah diabaikan git.
+
+ffmpeg wajib ada untuk job video (konversi AVI ke MP4); taruh binary di `tools/ffmpeg/bin/` atau set `FFMPEG_BIN`. Tanpa ffmpeg, generate gambar tetap jalan tetapi video akan tersimpan sebagai AVI lalu gagal dikonversi.
+
+Port 3001 bertabrakan dengan container mode Docker, jadi hentikan dulu bila ingin satu port:
+
+```bash
+docker compose stop ui
+./scripts/start-gpu-native.sh        # kembali ke Docker: docker compose start ui
 ```
 
 Hasil uji di mesin ini (Intel Iris Xe, 512x320, 10 step, 1 frame): **GPU Vulkan 90 detik** (sampling 61.9 detik) vs **CPU 8 vCPU 204 detik** (sampling 144.7 detik) — sekitar 2,3x lebih cepat. Untuk 5 frame/10 step, GPU butuh 175 detik. Karena memori GPU berbagi dengan RAM, naikkan frame/resolusi bertahap dan pantau `MemAvailable`.
